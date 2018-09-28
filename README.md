@@ -10,7 +10,7 @@ with links to source code locations.
 It does not cover [Clojure standard library](https://github.com/clojure/clojure/blob/master/src/clj/clojure),
  which is extensively documented on
 [clojure.github.io](https://clojure.github.io/clojure/clojure.core-api.html) (with links to
-source code) and [ClojureDocs](https://clojuredocs.org/core-library)
+source code) and [ClojureDocs](https://clojuredocs.org/core-library).
 
 This documentation was generated automatically, so it does not include the Javadoc comments that were
 not already present in the source code.
