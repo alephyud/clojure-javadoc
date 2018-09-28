@@ -23,4 +23,5 @@ repository](https://github.com/clojure/clojure/) using the following options:
 - Directory: `src/jvm/clojure`
 - Include test sources: disabled
 - Include JDK and library documentation: enabled
+- Include private members; include everything
 - Other command line arguments: `-linksource -html5`

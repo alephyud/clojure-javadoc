@@ -1,0 +1,420 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">// ASM: a very small and fast Java bytecode manipulation framework</a>
+<span class="sourceLineNo">002</span><a id="line.2">// Copyright (c) 2000-2011 INRIA, France Telecom</a>
+<span class="sourceLineNo">003</span><a id="line.3">// All rights reserved.</a>
+<span class="sourceLineNo">004</span><a id="line.4">//</a>
+<span class="sourceLineNo">005</span><a id="line.5">// Redistribution and use in source and binary forms, with or without</a>
+<span class="sourceLineNo">006</span><a id="line.6">// modification, are permitted provided that the following conditions</a>
+<span class="sourceLineNo">007</span><a id="line.7">// are met:</a>
+<span class="sourceLineNo">008</span><a id="line.8">// 1. Redistributions of source code must retain the above copyright</a>
+<span class="sourceLineNo">009</span><a id="line.9">//    notice, this list of conditions and the following disclaimer.</a>
+<span class="sourceLineNo">010</span><a id="line.10">// 2. Redistributions in binary form must reproduce the above copyright</a>
+<span class="sourceLineNo">011</span><a id="line.11">//    notice, this list of conditions and the following disclaimer in the</a>
+<span class="sourceLineNo">012</span><a id="line.12">//    documentation and/or other materials provided with the distribution.</a>
+<span class="sourceLineNo">013</span><a id="line.13">// 3. Neither the name of the copyright holders nor the names of its</a>
+<span class="sourceLineNo">014</span><a id="line.14">//    contributors may be used to endorse or promote products derived from</a>
+<span class="sourceLineNo">015</span><a id="line.15">//    this software without specific prior written permission.</a>
+<span class="sourceLineNo">016</span><a id="line.16">//</a>
+<span class="sourceLineNo">017</span><a id="line.17">// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"</a>
+<span class="sourceLineNo">018</span><a id="line.18">// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</a>
+<span class="sourceLineNo">019</span><a id="line.19">// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</a>
+<span class="sourceLineNo">020</span><a id="line.20">// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</a>
+<span class="sourceLineNo">021</span><a id="line.21">// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</a>
+<span class="sourceLineNo">022</span><a id="line.22">// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</a>
+<span class="sourceLineNo">023</span><a id="line.23">// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</a>
+<span class="sourceLineNo">024</span><a id="line.24">// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</a>
+<span class="sourceLineNo">025</span><a id="line.25">// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</a>
+<span class="sourceLineNo">026</span><a id="line.26">// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF</a>
+<span class="sourceLineNo">027</span><a id="line.27">// THE POSSIBILITY OF SUCH DAMAGE.</a>
+<span class="sourceLineNo">028</span><a id="line.28">package clojure.asm;</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">/**</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * A {@link FieldVisitor} that generates a corresponding 'field_info' structure, as defined in the</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * Java Virtual Machine Specification (JVMS).</a>
+<span class="sourceLineNo">033</span><a id="line.33"> *</a>
+<span class="sourceLineNo">034</span><a id="line.34"> * @see &lt;a href="https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.5"&gt;JVMS</a>
+<span class="sourceLineNo">035</span><a id="line.35"> *     4.5&lt;/a&gt;</a>
+<span class="sourceLineNo">036</span><a id="line.36"> * @author Eric Bruneton</a>
+<span class="sourceLineNo">037</span><a id="line.37"> */</a>
+<span class="sourceLineNo">038</span><a id="line.38">final class FieldWriter extends FieldVisitor {</a>
+<span class="sourceLineNo">039</span><a id="line.39"></a>
+<span class="sourceLineNo">040</span><a id="line.40">  /** Where the constants used in this FieldWriter must be stored. */</a>
+<span class="sourceLineNo">041</span><a id="line.41">  private final SymbolTable symbolTable;</a>
+<span class="sourceLineNo">042</span><a id="line.42"></a>
+<span class="sourceLineNo">043</span><a id="line.43">  // Note: fields are ordered as in the field_info structure, and those related to attributes are</a>
+<span class="sourceLineNo">044</span><a id="line.44">  // ordered as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">045</span><a id="line.45"></a>
+<span class="sourceLineNo">046</span><a id="line.46">  /**</a>
+<span class="sourceLineNo">047</span><a id="line.47">   * The access_flags field of the field_info JVMS structure. This field can contain ASM specific</a>
+<span class="sourceLineNo">048</span><a id="line.48">   * access flags, such as {@link Opcodes#ACC_DEPRECATED}, which are removed when generating the</a>
+<span class="sourceLineNo">049</span><a id="line.49">   * ClassFile structure.</a>
+<span class="sourceLineNo">050</span><a id="line.50">   */</a>
+<span class="sourceLineNo">051</span><a id="line.51">  private final int accessFlags;</a>
+<span class="sourceLineNo">052</span><a id="line.52"></a>
+<span class="sourceLineNo">053</span><a id="line.53">  /** The name_index field of the field_info JVMS structure. */</a>
+<span class="sourceLineNo">054</span><a id="line.54">  private final int nameIndex;</a>
+<span class="sourceLineNo">055</span><a id="line.55"></a>
+<span class="sourceLineNo">056</span><a id="line.56">  /** The descriptor_index field of the field_info JVMS structure. */</a>
+<span class="sourceLineNo">057</span><a id="line.57">  private final int descriptorIndex;</a>
+<span class="sourceLineNo">058</span><a id="line.58"></a>
+<span class="sourceLineNo">059</span><a id="line.59">  /**</a>
+<span class="sourceLineNo">060</span><a id="line.60">   * The signature_index field of the Signature attribute of this field_info, or 0 if there is no</a>
+<span class="sourceLineNo">061</span><a id="line.61">   * Signature attribute.</a>
+<span class="sourceLineNo">062</span><a id="line.62">   */</a>
+<span class="sourceLineNo">063</span><a id="line.63">  private int signatureIndex;</a>
+<span class="sourceLineNo">064</span><a id="line.64"></a>
+<span class="sourceLineNo">065</span><a id="line.65">  /**</a>
+<span class="sourceLineNo">066</span><a id="line.66">   * The constantvalue_index field of the ConstantValue attribute of this field_info, or 0 if there</a>
+<span class="sourceLineNo">067</span><a id="line.67">   * is no ConstantValue attribute.</a>
+<span class="sourceLineNo">068</span><a id="line.68">   */</a>
+<span class="sourceLineNo">069</span><a id="line.69">  private int constantValueIndex;</a>
+<span class="sourceLineNo">070</span><a id="line.70"></a>
+<span class="sourceLineNo">071</span><a id="line.71">  /**</a>
+<span class="sourceLineNo">072</span><a id="line.72">   * The last runtime visible annotation of this field. The previous ones can be accessed with the</a>
+<span class="sourceLineNo">073</span><a id="line.73">   * {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">074</span><a id="line.74">   */</a>
+<span class="sourceLineNo">075</span><a id="line.75">  private AnnotationWriter lastRuntimeVisibleAnnotation;</a>
+<span class="sourceLineNo">076</span><a id="line.76"></a>
+<span class="sourceLineNo">077</span><a id="line.77">  /**</a>
+<span class="sourceLineNo">078</span><a id="line.78">   * The last runtime invisible annotation of this field. The previous ones can be accessed with the</a>
+<span class="sourceLineNo">079</span><a id="line.79">   * {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">080</span><a id="line.80">   */</a>
+<span class="sourceLineNo">081</span><a id="line.81">  private AnnotationWriter lastRuntimeInvisibleAnnotation;</a>
+<span class="sourceLineNo">082</span><a id="line.82"></a>
+<span class="sourceLineNo">083</span><a id="line.83">  /**</a>
+<span class="sourceLineNo">084</span><a id="line.84">   * The last runtime visible type annotation of this field. The previous ones can be accessed with</a>
+<span class="sourceLineNo">085</span><a id="line.85">   * the {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">086</span><a id="line.86">   */</a>
+<span class="sourceLineNo">087</span><a id="line.87">  private AnnotationWriter lastRuntimeVisibleTypeAnnotation;</a>
+<span class="sourceLineNo">088</span><a id="line.88"></a>
+<span class="sourceLineNo">089</span><a id="line.89">  /**</a>
+<span class="sourceLineNo">090</span><a id="line.90">   * The last runtime invisible type annotation of this field. The previous ones can be accessed</a>
+<span class="sourceLineNo">091</span><a id="line.91">   * with the {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">092</span><a id="line.92">   */</a>
+<span class="sourceLineNo">093</span><a id="line.93">  private AnnotationWriter lastRuntimeInvisibleTypeAnnotation;</a>
+<span class="sourceLineNo">094</span><a id="line.94"></a>
+<span class="sourceLineNo">095</span><a id="line.95">  /**</a>
+<span class="sourceLineNo">096</span><a id="line.96">   * The first non standard attribute of this field. The next ones can be accessed with the {@link</a>
+<span class="sourceLineNo">097</span><a id="line.97">   * Attribute#nextAttribute} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">098</span><a id="line.98">   *</a>
+<span class="sourceLineNo">099</span><a id="line.99">   * &lt;p&gt;&lt;b&gt;WARNING&lt;/b&gt;: this list stores the attributes in the &lt;i&gt;reverse&lt;/i&gt; order of their visit.</a>
+<span class="sourceLineNo">100</span><a id="line.100">   * firstAttribute is actually the last attribute visited in {@link #visitAttribute}. The {@link</a>
+<span class="sourceLineNo">101</span><a id="line.101">   * #putFieldInfo} method writes the attributes in the order defined by this list, i.e. in the</a>
+<span class="sourceLineNo">102</span><a id="line.102">   * reverse order specified by the user.</a>
+<span class="sourceLineNo">103</span><a id="line.103">   */</a>
+<span class="sourceLineNo">104</span><a id="line.104">  private Attribute firstAttribute;</a>
+<span class="sourceLineNo">105</span><a id="line.105"></a>
+<span class="sourceLineNo">106</span><a id="line.106">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">107</span><a id="line.107">  // Constructor</a>
+<span class="sourceLineNo">108</span><a id="line.108">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">109</span><a id="line.109"></a>
+<span class="sourceLineNo">110</span><a id="line.110">  /**</a>
+<span class="sourceLineNo">111</span><a id="line.111">   * Constructs a new {@link FieldWriter}.</a>
+<span class="sourceLineNo">112</span><a id="line.112">   *</a>
+<span class="sourceLineNo">113</span><a id="line.113">   * @param symbolTable where the constants used in this FieldWriter must be stored.</a>
+<span class="sourceLineNo">114</span><a id="line.114">   * @param access the field's access flags (see {@link Opcodes}).</a>
+<span class="sourceLineNo">115</span><a id="line.115">   * @param name the field's name.</a>
+<span class="sourceLineNo">116</span><a id="line.116">   * @param descriptor the field's descriptor (see {@link Type}).</a>
+<span class="sourceLineNo">117</span><a id="line.117">   * @param signature the field's signature. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">118</span><a id="line.118">   * @param constantValue the field's constant value. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">119</span><a id="line.119">   */</a>
+<span class="sourceLineNo">120</span><a id="line.120">  FieldWriter(</a>
+<span class="sourceLineNo">121</span><a id="line.121">      final SymbolTable symbolTable,</a>
+<span class="sourceLineNo">122</span><a id="line.122">      final int access,</a>
+<span class="sourceLineNo">123</span><a id="line.123">      final String name,</a>
+<span class="sourceLineNo">124</span><a id="line.124">      final String descriptor,</a>
+<span class="sourceLineNo">125</span><a id="line.125">      final String signature,</a>
+<span class="sourceLineNo">126</span><a id="line.126">      final Object constantValue) {</a>
+<span class="sourceLineNo">127</span><a id="line.127">    super(Opcodes.ASM6);</a>
+<span class="sourceLineNo">128</span><a id="line.128">    this.symbolTable = symbolTable;</a>
+<span class="sourceLineNo">129</span><a id="line.129">    this.accessFlags = access;</a>
+<span class="sourceLineNo">130</span><a id="line.130">    this.nameIndex = symbolTable.addConstantUtf8(name);</a>
+<span class="sourceLineNo">131</span><a id="line.131">    this.descriptorIndex = symbolTable.addConstantUtf8(descriptor);</a>
+<span class="sourceLineNo">132</span><a id="line.132">    if (signature != null) {</a>
+<span class="sourceLineNo">133</span><a id="line.133">      this.signatureIndex = symbolTable.addConstantUtf8(signature);</a>
+<span class="sourceLineNo">134</span><a id="line.134">    }</a>
+<span class="sourceLineNo">135</span><a id="line.135">    if (constantValue != null) {</a>
+<span class="sourceLineNo">136</span><a id="line.136">      this.constantValueIndex = symbolTable.addConstant(constantValue).index;</a>
+<span class="sourceLineNo">137</span><a id="line.137">    }</a>
+<span class="sourceLineNo">138</span><a id="line.138">  }</a>
+<span class="sourceLineNo">139</span><a id="line.139"></a>
+<span class="sourceLineNo">140</span><a id="line.140">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">141</span><a id="line.141">  // Implementation of the FieldVisitor abstract class</a>
+<span class="sourceLineNo">142</span><a id="line.142">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">143</span><a id="line.143"></a>
+<span class="sourceLineNo">144</span><a id="line.144">  @Override</a>
+<span class="sourceLineNo">145</span><a id="line.145">  public AnnotationVisitor visitAnnotation(final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">146</span><a id="line.146">    // Create a ByteVector to hold an 'annotation' JVMS structure.</a>
+<span class="sourceLineNo">147</span><a id="line.147">    // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.7.16.</a>
+<span class="sourceLineNo">148</span><a id="line.148">    ByteVector annotation = new ByteVector();</a>
+<span class="sourceLineNo">149</span><a id="line.149">    // Write type_index and reserve space for num_element_value_pairs.</a>
+<span class="sourceLineNo">150</span><a id="line.150">    annotation.putShort(symbolTable.addConstantUtf8(descriptor)).putShort(0);</a>
+<span class="sourceLineNo">151</span><a id="line.151">    if (visible) {</a>
+<span class="sourceLineNo">152</span><a id="line.152">      return lastRuntimeVisibleAnnotation =</a>
+<span class="sourceLineNo">153</span><a id="line.153">          new AnnotationWriter(symbolTable, annotation, lastRuntimeVisibleAnnotation);</a>
+<span class="sourceLineNo">154</span><a id="line.154">    } else {</a>
+<span class="sourceLineNo">155</span><a id="line.155">      return lastRuntimeInvisibleAnnotation =</a>
+<span class="sourceLineNo">156</span><a id="line.156">          new AnnotationWriter(symbolTable, annotation, lastRuntimeInvisibleAnnotation);</a>
+<span class="sourceLineNo">157</span><a id="line.157">    }</a>
+<span class="sourceLineNo">158</span><a id="line.158">  }</a>
+<span class="sourceLineNo">159</span><a id="line.159"></a>
+<span class="sourceLineNo">160</span><a id="line.160">  @Override</a>
+<span class="sourceLineNo">161</span><a id="line.161">  public AnnotationVisitor visitTypeAnnotation(</a>
+<span class="sourceLineNo">162</span><a id="line.162">      final int typeRef, final TypePath typePath, final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">163</span><a id="line.163">    // Create a ByteVector to hold a 'type_annotation' JVMS structure.</a>
+<span class="sourceLineNo">164</span><a id="line.164">    // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.7.20.</a>
+<span class="sourceLineNo">165</span><a id="line.165">    ByteVector typeAnnotation = new ByteVector();</a>
+<span class="sourceLineNo">166</span><a id="line.166">    // Write target_type, target_info, and target_path.</a>
+<span class="sourceLineNo">167</span><a id="line.167">    TypeReference.putTarget(typeRef, typeAnnotation);</a>
+<span class="sourceLineNo">168</span><a id="line.168">    TypePath.put(typePath, typeAnnotation);</a>
+<span class="sourceLineNo">169</span><a id="line.169">    // Write type_index and reserve space for num_element_value_pairs.</a>
+<span class="sourceLineNo">170</span><a id="line.170">    typeAnnotation.putShort(symbolTable.addConstantUtf8(descriptor)).putShort(0);</a>
+<span class="sourceLineNo">171</span><a id="line.171">    if (visible) {</a>
+<span class="sourceLineNo">172</span><a id="line.172">      return lastRuntimeVisibleTypeAnnotation =</a>
+<span class="sourceLineNo">173</span><a id="line.173">          new AnnotationWriter(symbolTable, typeAnnotation, lastRuntimeVisibleTypeAnnotation);</a>
+<span class="sourceLineNo">174</span><a id="line.174">    } else {</a>
+<span class="sourceLineNo">175</span><a id="line.175">      return lastRuntimeInvisibleTypeAnnotation =</a>
+<span class="sourceLineNo">176</span><a id="line.176">          new AnnotationWriter(symbolTable, typeAnnotation, lastRuntimeInvisibleTypeAnnotation);</a>
+<span class="sourceLineNo">177</span><a id="line.177">    }</a>
+<span class="sourceLineNo">178</span><a id="line.178">  }</a>
+<span class="sourceLineNo">179</span><a id="line.179"></a>
+<span class="sourceLineNo">180</span><a id="line.180">  @Override</a>
+<span class="sourceLineNo">181</span><a id="line.181">  public void visitAttribute(final Attribute attribute) {</a>
+<span class="sourceLineNo">182</span><a id="line.182">    // Store the attributes in the &lt;i&gt;reverse&lt;/i&gt; order of their visit by this method.</a>
+<span class="sourceLineNo">183</span><a id="line.183">    attribute.nextAttribute = firstAttribute;</a>
+<span class="sourceLineNo">184</span><a id="line.184">    firstAttribute = attribute;</a>
+<span class="sourceLineNo">185</span><a id="line.185">  }</a>
+<span class="sourceLineNo">186</span><a id="line.186"></a>
+<span class="sourceLineNo">187</span><a id="line.187">  @Override</a>
+<span class="sourceLineNo">188</span><a id="line.188">  public void visitEnd() {</a>
+<span class="sourceLineNo">189</span><a id="line.189">    // Nothing to do.</a>
+<span class="sourceLineNo">190</span><a id="line.190">  }</a>
+<span class="sourceLineNo">191</span><a id="line.191"></a>
+<span class="sourceLineNo">192</span><a id="line.192">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">193</span><a id="line.193">  // Utility methods</a>
+<span class="sourceLineNo">194</span><a id="line.194">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">195</span><a id="line.195"></a>
+<span class="sourceLineNo">196</span><a id="line.196">  /**</a>
+<span class="sourceLineNo">197</span><a id="line.197">   * Returns the size of the field_info JVMS structure generated by this FieldWriter. Also adds the</a>
+<span class="sourceLineNo">198</span><a id="line.198">   * names of the attributes of this field in the constant pool.</a>
+<span class="sourceLineNo">199</span><a id="line.199">   *</a>
+<span class="sourceLineNo">200</span><a id="line.200">   * @return the size in bytes of the field_info JVMS structure.</a>
+<span class="sourceLineNo">201</span><a id="line.201">   */</a>
+<span class="sourceLineNo">202</span><a id="line.202">  int computeFieldInfoSize() {</a>
+<span class="sourceLineNo">203</span><a id="line.203">    // The access_flags, name_index, descriptor_index and attributes_count fields use 8 bytes.</a>
+<span class="sourceLineNo">204</span><a id="line.204">    int size = 8;</a>
+<span class="sourceLineNo">205</span><a id="line.205">    // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">206</span><a id="line.206">    if (constantValueIndex != 0) {</a>
+<span class="sourceLineNo">207</span><a id="line.207">      // ConstantValue attributes always use 8 bytes.</a>
+<span class="sourceLineNo">208</span><a id="line.208">      symbolTable.addConstantUtf8(Constants.CONSTANT_VALUE);</a>
+<span class="sourceLineNo">209</span><a id="line.209">      size += 8;</a>
+<span class="sourceLineNo">210</span><a id="line.210">    }</a>
+<span class="sourceLineNo">211</span><a id="line.211">    // Before Java 1.5, synthetic fields are represented with a Synthetic attribute.</a>
+<span class="sourceLineNo">212</span><a id="line.212">    if ((accessFlags &amp; Opcodes.ACC_SYNTHETIC) != 0</a>
+<span class="sourceLineNo">213</span><a id="line.213">        &amp;&amp; symbolTable.getMajorVersion() &lt; Opcodes.V1_5) {</a>
+<span class="sourceLineNo">214</span><a id="line.214">      // Synthetic attributes always use 6 bytes.</a>
+<span class="sourceLineNo">215</span><a id="line.215">      symbolTable.addConstantUtf8(Constants.SYNTHETIC);</a>
+<span class="sourceLineNo">216</span><a id="line.216">      size += 6;</a>
+<span class="sourceLineNo">217</span><a id="line.217">    }</a>
+<span class="sourceLineNo">218</span><a id="line.218">    if (signatureIndex != 0) {</a>
+<span class="sourceLineNo">219</span><a id="line.219">      // Signature attributes always use 8 bytes.</a>
+<span class="sourceLineNo">220</span><a id="line.220">      symbolTable.addConstantUtf8(Constants.SIGNATURE);</a>
+<span class="sourceLineNo">221</span><a id="line.221">      size += 8;</a>
+<span class="sourceLineNo">222</span><a id="line.222">    }</a>
+<span class="sourceLineNo">223</span><a id="line.223">    // ACC_DEPRECATED is ASM specific, the ClassFile format uses a Deprecated attribute instead.</a>
+<span class="sourceLineNo">224</span><a id="line.224">    if ((accessFlags &amp; Opcodes.ACC_DEPRECATED) != 0) {</a>
+<span class="sourceLineNo">225</span><a id="line.225">      // Deprecated attributes always use 6 bytes.</a>
+<span class="sourceLineNo">226</span><a id="line.226">      symbolTable.addConstantUtf8(Constants.DEPRECATED);</a>
+<span class="sourceLineNo">227</span><a id="line.227">      size += 6;</a>
+<span class="sourceLineNo">228</span><a id="line.228">    }</a>
+<span class="sourceLineNo">229</span><a id="line.229">    if (lastRuntimeVisibleAnnotation != null) {</a>
+<span class="sourceLineNo">230</span><a id="line.230">      size +=</a>
+<span class="sourceLineNo">231</span><a id="line.231">          lastRuntimeVisibleAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">232</span><a id="line.232">              Constants.RUNTIME_VISIBLE_ANNOTATIONS);</a>
+<span class="sourceLineNo">233</span><a id="line.233">    }</a>
+<span class="sourceLineNo">234</span><a id="line.234">    if (lastRuntimeInvisibleAnnotation != null) {</a>
+<span class="sourceLineNo">235</span><a id="line.235">      size +=</a>
+<span class="sourceLineNo">236</span><a id="line.236">          lastRuntimeInvisibleAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">237</span><a id="line.237">              Constants.RUNTIME_INVISIBLE_ANNOTATIONS);</a>
+<span class="sourceLineNo">238</span><a id="line.238">    }</a>
+<span class="sourceLineNo">239</span><a id="line.239">    if (lastRuntimeVisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">240</span><a id="line.240">      size +=</a>
+<span class="sourceLineNo">241</span><a id="line.241">          lastRuntimeVisibleTypeAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">242</span><a id="line.242">              Constants.RUNTIME_VISIBLE_TYPE_ANNOTATIONS);</a>
+<span class="sourceLineNo">243</span><a id="line.243">    }</a>
+<span class="sourceLineNo">244</span><a id="line.244">    if (lastRuntimeInvisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">245</span><a id="line.245">      size +=</a>
+<span class="sourceLineNo">246</span><a id="line.246">          lastRuntimeInvisibleTypeAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">247</span><a id="line.247">              Constants.RUNTIME_INVISIBLE_TYPE_ANNOTATIONS);</a>
+<span class="sourceLineNo">248</span><a id="line.248">    }</a>
+<span class="sourceLineNo">249</span><a id="line.249">    if (firstAttribute != null) {</a>
+<span class="sourceLineNo">250</span><a id="line.250">      size += firstAttribute.computeAttributesSize(symbolTable);</a>
+<span class="sourceLineNo">251</span><a id="line.251">    }</a>
+<span class="sourceLineNo">252</span><a id="line.252">    return size;</a>
+<span class="sourceLineNo">253</span><a id="line.253">  }</a>
+<span class="sourceLineNo">254</span><a id="line.254"></a>
+<span class="sourceLineNo">255</span><a id="line.255">  /**</a>
+<span class="sourceLineNo">256</span><a id="line.256">   * Puts the content of the field_info JVMS structure generated by this FieldWriter into the given</a>
+<span class="sourceLineNo">257</span><a id="line.257">   * ByteVector.</a>
+<span class="sourceLineNo">258</span><a id="line.258">   *</a>
+<span class="sourceLineNo">259</span><a id="line.259">   * @param output where the field_info structure must be put.</a>
+<span class="sourceLineNo">260</span><a id="line.260">   */</a>
+<span class="sourceLineNo">261</span><a id="line.261">  void putFieldInfo(final ByteVector output) {</a>
+<span class="sourceLineNo">262</span><a id="line.262">    boolean useSyntheticAttribute = symbolTable.getMajorVersion() &lt; Opcodes.V1_5;</a>
+<span class="sourceLineNo">263</span><a id="line.263">    // Put the access_flags, name_index and descriptor_index fields.</a>
+<span class="sourceLineNo">264</span><a id="line.264">    int mask = useSyntheticAttribute ? Opcodes.ACC_SYNTHETIC : 0;</a>
+<span class="sourceLineNo">265</span><a id="line.265">    output.putShort(accessFlags &amp; ~mask).putShort(nameIndex).putShort(descriptorIndex);</a>
+<span class="sourceLineNo">266</span><a id="line.266">    // Compute and put the attributes_count field.</a>
+<span class="sourceLineNo">267</span><a id="line.267">    // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">268</span><a id="line.268">    int attributesCount = 0;</a>
+<span class="sourceLineNo">269</span><a id="line.269">    if (constantValueIndex != 0) {</a>
+<span class="sourceLineNo">270</span><a id="line.270">      ++attributesCount;</a>
+<span class="sourceLineNo">271</span><a id="line.271">    }</a>
+<span class="sourceLineNo">272</span><a id="line.272">    if ((accessFlags &amp; Opcodes.ACC_SYNTHETIC) != 0 &amp;&amp; useSyntheticAttribute) {</a>
+<span class="sourceLineNo">273</span><a id="line.273">      ++attributesCount;</a>
+<span class="sourceLineNo">274</span><a id="line.274">    }</a>
+<span class="sourceLineNo">275</span><a id="line.275">    if (signatureIndex != 0) {</a>
+<span class="sourceLineNo">276</span><a id="line.276">      ++attributesCount;</a>
+<span class="sourceLineNo">277</span><a id="line.277">    }</a>
+<span class="sourceLineNo">278</span><a id="line.278">    if ((accessFlags &amp; Opcodes.ACC_DEPRECATED) != 0) {</a>
+<span class="sourceLineNo">279</span><a id="line.279">      ++attributesCount;</a>
+<span class="sourceLineNo">280</span><a id="line.280">    }</a>
+<span class="sourceLineNo">281</span><a id="line.281">    if (lastRuntimeVisibleAnnotation != null) {</a>
+<span class="sourceLineNo">282</span><a id="line.282">      ++attributesCount;</a>
+<span class="sourceLineNo">283</span><a id="line.283">    }</a>
+<span class="sourceLineNo">284</span><a id="line.284">    if (lastRuntimeInvisibleAnnotation != null) {</a>
+<span class="sourceLineNo">285</span><a id="line.285">      ++attributesCount;</a>
+<span class="sourceLineNo">286</span><a id="line.286">    }</a>
+<span class="sourceLineNo">287</span><a id="line.287">    if (lastRuntimeVisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">288</span><a id="line.288">      ++attributesCount;</a>
+<span class="sourceLineNo">289</span><a id="line.289">    }</a>
+<span class="sourceLineNo">290</span><a id="line.290">    if (lastRuntimeInvisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">291</span><a id="line.291">      ++attributesCount;</a>
+<span class="sourceLineNo">292</span><a id="line.292">    }</a>
+<span class="sourceLineNo">293</span><a id="line.293">    if (firstAttribute != null) {</a>
+<span class="sourceLineNo">294</span><a id="line.294">      attributesCount += firstAttribute.getAttributeCount();</a>
+<span class="sourceLineNo">295</span><a id="line.295">    }</a>
+<span class="sourceLineNo">296</span><a id="line.296">    output.putShort(attributesCount);</a>
+<span class="sourceLineNo">297</span><a id="line.297">    // Put the field_info attributes.</a>
+<span class="sourceLineNo">298</span><a id="line.298">    // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">299</span><a id="line.299">    if (constantValueIndex != 0) {</a>
+<span class="sourceLineNo">300</span><a id="line.300">      output</a>
+<span class="sourceLineNo">301</span><a id="line.301">          .putShort(symbolTable.addConstantUtf8(Constants.CONSTANT_VALUE))</a>
+<span class="sourceLineNo">302</span><a id="line.302">          .putInt(2)</a>
+<span class="sourceLineNo">303</span><a id="line.303">          .putShort(constantValueIndex);</a>
+<span class="sourceLineNo">304</span><a id="line.304">    }</a>
+<span class="sourceLineNo">305</span><a id="line.305">    if ((accessFlags &amp; Opcodes.ACC_SYNTHETIC) != 0 &amp;&amp; useSyntheticAttribute) {</a>
+<span class="sourceLineNo">306</span><a id="line.306">      output.putShort(symbolTable.addConstantUtf8(Constants.SYNTHETIC)).putInt(0);</a>
+<span class="sourceLineNo">307</span><a id="line.307">    }</a>
+<span class="sourceLineNo">308</span><a id="line.308">    if (signatureIndex != 0) {</a>
+<span class="sourceLineNo">309</span><a id="line.309">      output</a>
+<span class="sourceLineNo">310</span><a id="line.310">          .putShort(symbolTable.addConstantUtf8(Constants.SIGNATURE))</a>
+<span class="sourceLineNo">311</span><a id="line.311">          .putInt(2)</a>
+<span class="sourceLineNo">312</span><a id="line.312">          .putShort(signatureIndex);</a>
+<span class="sourceLineNo">313</span><a id="line.313">    }</a>
+<span class="sourceLineNo">314</span><a id="line.314">    if ((accessFlags &amp; Opcodes.ACC_DEPRECATED) != 0) {</a>
+<span class="sourceLineNo">315</span><a id="line.315">      output.putShort(symbolTable.addConstantUtf8(Constants.DEPRECATED)).putInt(0);</a>
+<span class="sourceLineNo">316</span><a id="line.316">    }</a>
+<span class="sourceLineNo">317</span><a id="line.317">    if (lastRuntimeVisibleAnnotation != null) {</a>
+<span class="sourceLineNo">318</span><a id="line.318">      lastRuntimeVisibleAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">319</span><a id="line.319">          symbolTable.addConstantUtf8(Constants.RUNTIME_VISIBLE_ANNOTATIONS), output);</a>
+<span class="sourceLineNo">320</span><a id="line.320">    }</a>
+<span class="sourceLineNo">321</span><a id="line.321">    if (lastRuntimeInvisibleAnnotation != null) {</a>
+<span class="sourceLineNo">322</span><a id="line.322">      lastRuntimeInvisibleAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">323</span><a id="line.323">          symbolTable.addConstantUtf8(Constants.RUNTIME_INVISIBLE_ANNOTATIONS), output);</a>
+<span class="sourceLineNo">324</span><a id="line.324">    }</a>
+<span class="sourceLineNo">325</span><a id="line.325">    if (lastRuntimeVisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">326</span><a id="line.326">      lastRuntimeVisibleTypeAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">327</span><a id="line.327">          symbolTable.addConstantUtf8(Constants.RUNTIME_VISIBLE_TYPE_ANNOTATIONS), output);</a>
+<span class="sourceLineNo">328</span><a id="line.328">    }</a>
+<span class="sourceLineNo">329</span><a id="line.329">    if (lastRuntimeInvisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">330</span><a id="line.330">      lastRuntimeInvisibleTypeAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">331</span><a id="line.331">          symbolTable.addConstantUtf8(Constants.RUNTIME_INVISIBLE_TYPE_ANNOTATIONS), output);</a>
+<span class="sourceLineNo">332</span><a id="line.332">    }</a>
+<span class="sourceLineNo">333</span><a id="line.333">    if (firstAttribute != null) {</a>
+<span class="sourceLineNo">334</span><a id="line.334">      firstAttribute.putAttributes(symbolTable, output);</a>
+<span class="sourceLineNo">335</span><a id="line.335">    }</a>
+<span class="sourceLineNo">336</span><a id="line.336">  }</a>
+<span class="sourceLineNo">337</span><a id="line.337"></a>
+<span class="sourceLineNo">338</span><a id="line.338">  /**</a>
+<span class="sourceLineNo">339</span><a id="line.339">   * Collects the attributes of this field into the given set of attribute prototypes.</a>
+<span class="sourceLineNo">340</span><a id="line.340">   *</a>
+<span class="sourceLineNo">341</span><a id="line.341">   * @param attributePrototypes a set of attribute prototypes.</a>
+<span class="sourceLineNo">342</span><a id="line.342">   */</a>
+<span class="sourceLineNo">343</span><a id="line.343">  final void collectAttributePrototypes(final Attribute.Set attributePrototypes) {</a>
+<span class="sourceLineNo">344</span><a id="line.344">    attributePrototypes.addAttributes(firstAttribute);</a>
+<span class="sourceLineNo">345</span><a id="line.345">  }</a>
+<span class="sourceLineNo">346</span><a id="line.346">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

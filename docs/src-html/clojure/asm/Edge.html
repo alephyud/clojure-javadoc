@@ -1,0 +1,165 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">// ASM: a very small and fast Java bytecode manipulation framework</a>
+<span class="sourceLineNo">002</span><a id="line.2">// Copyright (c) 2000-2011 INRIA, France Telecom</a>
+<span class="sourceLineNo">003</span><a id="line.3">// All rights reserved.</a>
+<span class="sourceLineNo">004</span><a id="line.4">//</a>
+<span class="sourceLineNo">005</span><a id="line.5">// Redistribution and use in source and binary forms, with or without</a>
+<span class="sourceLineNo">006</span><a id="line.6">// modification, are permitted provided that the following conditions</a>
+<span class="sourceLineNo">007</span><a id="line.7">// are met:</a>
+<span class="sourceLineNo">008</span><a id="line.8">// 1. Redistributions of source code must retain the above copyright</a>
+<span class="sourceLineNo">009</span><a id="line.9">//    notice, this list of conditions and the following disclaimer.</a>
+<span class="sourceLineNo">010</span><a id="line.10">// 2. Redistributions in binary form must reproduce the above copyright</a>
+<span class="sourceLineNo">011</span><a id="line.11">//    notice, this list of conditions and the following disclaimer in the</a>
+<span class="sourceLineNo">012</span><a id="line.12">//    documentation and/or other materials provided with the distribution.</a>
+<span class="sourceLineNo">013</span><a id="line.13">// 3. Neither the name of the copyright holders nor the names of its</a>
+<span class="sourceLineNo">014</span><a id="line.14">//    contributors may be used to endorse or promote products derived from</a>
+<span class="sourceLineNo">015</span><a id="line.15">//    this software without specific prior written permission.</a>
+<span class="sourceLineNo">016</span><a id="line.16">//</a>
+<span class="sourceLineNo">017</span><a id="line.17">// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"</a>
+<span class="sourceLineNo">018</span><a id="line.18">// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</a>
+<span class="sourceLineNo">019</span><a id="line.19">// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</a>
+<span class="sourceLineNo">020</span><a id="line.20">// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</a>
+<span class="sourceLineNo">021</span><a id="line.21">// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</a>
+<span class="sourceLineNo">022</span><a id="line.22">// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</a>
+<span class="sourceLineNo">023</span><a id="line.23">// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</a>
+<span class="sourceLineNo">024</span><a id="line.24">// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</a>
+<span class="sourceLineNo">025</span><a id="line.25">// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</a>
+<span class="sourceLineNo">026</span><a id="line.26">// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF</a>
+<span class="sourceLineNo">027</span><a id="line.27">// THE POSSIBILITY OF SUCH DAMAGE.</a>
+<span class="sourceLineNo">028</span><a id="line.28">package clojure.asm;</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">/**</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * An edge in the control flow graph of a method. Each node of this graph is a basic block,</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * represented with the Label corresponding to its first instruction. Each edge goes from one node</a>
+<span class="sourceLineNo">033</span><a id="line.33"> * to another, i.e. from one basic block to another (called the predecessor and successor blocks,</a>
+<span class="sourceLineNo">034</span><a id="line.34"> * respectively). An edge corresponds either to a jump or ret instruction or to an exception</a>
+<span class="sourceLineNo">035</span><a id="line.35"> * handler.</a>
+<span class="sourceLineNo">036</span><a id="line.36"> *</a>
+<span class="sourceLineNo">037</span><a id="line.37"> * @see Label</a>
+<span class="sourceLineNo">038</span><a id="line.38"> * @author Eric Bruneton</a>
+<span class="sourceLineNo">039</span><a id="line.39"> */</a>
+<span class="sourceLineNo">040</span><a id="line.40">final class Edge {</a>
+<span class="sourceLineNo">041</span><a id="line.41"></a>
+<span class="sourceLineNo">042</span><a id="line.42">  /**</a>
+<span class="sourceLineNo">043</span><a id="line.43">   * A control flow graph edge corresponding to a jump or ret instruction. Only used with {@link</a>
+<span class="sourceLineNo">044</span><a id="line.44">   * ClassWriter#COMPUTE_FRAMES}.</a>
+<span class="sourceLineNo">045</span><a id="line.45">   */</a>
+<span class="sourceLineNo">046</span><a id="line.46">  static final int JUMP = 0;</a>
+<span class="sourceLineNo">047</span><a id="line.47"></a>
+<span class="sourceLineNo">048</span><a id="line.48">  /**</a>
+<span class="sourceLineNo">049</span><a id="line.49">   * A control flow graph edge corresponding to an exception handler. Only used with {@link</a>
+<span class="sourceLineNo">050</span><a id="line.50">   * ClassWriter#COMPUTE_MAXS}.</a>
+<span class="sourceLineNo">051</span><a id="line.51">   */</a>
+<span class="sourceLineNo">052</span><a id="line.52">  static final int EXCEPTION = 0x7FFFFFFF;</a>
+<span class="sourceLineNo">053</span><a id="line.53"></a>
+<span class="sourceLineNo">054</span><a id="line.54">  /**</a>
+<span class="sourceLineNo">055</span><a id="line.55">   * Information about this control flow graph edge.</a>
+<span class="sourceLineNo">056</span><a id="line.56">   *</a>
+<span class="sourceLineNo">057</span><a id="line.57">   * &lt;ul&gt;</a>
+<span class="sourceLineNo">058</span><a id="line.58">   *   &lt;li&gt;If {@link ClassWriter#COMPUTE_MAXS} is used, this field contains either a stack size</a>
+<span class="sourceLineNo">059</span><a id="line.59">   *       delta (for an edge corresponding to a jump instruction), or the value EXCEPTION (for an</a>
+<span class="sourceLineNo">060</span><a id="line.60">   *       edge corresponding to an exception handler). The stack size delta is the stack size just</a>
+<span class="sourceLineNo">061</span><a id="line.61">   *       after the jump instruction, minus the stack size at the beginning of the predecessor</a>
+<span class="sourceLineNo">062</span><a id="line.62">   *       basic block, i.e. the one containing the jump instruction.</a>
+<span class="sourceLineNo">063</span><a id="line.63">   *   &lt;li&gt;If {@link ClassWriter#COMPUTE_FRAMES} is used, this field contains either the value JUMP</a>
+<span class="sourceLineNo">064</span><a id="line.64">   *       (for an edge corresponding to a jump instruction), or the index, in the {@link</a>
+<span class="sourceLineNo">065</span><a id="line.65">   *       ClassWriter} type table, of the exception type that is handled (for an edge corresponding</a>
+<span class="sourceLineNo">066</span><a id="line.66">   *       to an exception handler).</a>
+<span class="sourceLineNo">067</span><a id="line.67">   * &lt;/ul&gt;</a>
+<span class="sourceLineNo">068</span><a id="line.68">   */</a>
+<span class="sourceLineNo">069</span><a id="line.69">  final int info;</a>
+<span class="sourceLineNo">070</span><a id="line.70"></a>
+<span class="sourceLineNo">071</span><a id="line.71">  /** The successor block of this control flow graph edge. */</a>
+<span class="sourceLineNo">072</span><a id="line.72">  final Label successor;</a>
+<span class="sourceLineNo">073</span><a id="line.73"></a>
+<span class="sourceLineNo">074</span><a id="line.74">  /**</a>
+<span class="sourceLineNo">075</span><a id="line.75">   * The next edge in the list of outgoing edges of a basic block. See {@link Label#outgoingEdges}.</a>
+<span class="sourceLineNo">076</span><a id="line.76">   */</a>
+<span class="sourceLineNo">077</span><a id="line.77">  Edge nextEdge;</a>
+<span class="sourceLineNo">078</span><a id="line.78"></a>
+<span class="sourceLineNo">079</span><a id="line.79">  /**</a>
+<span class="sourceLineNo">080</span><a id="line.80">   * Constructs a new Edge.</a>
+<span class="sourceLineNo">081</span><a id="line.81">   *</a>
+<span class="sourceLineNo">082</span><a id="line.82">   * @param info see {@link #info}.</a>
+<span class="sourceLineNo">083</span><a id="line.83">   * @param successor see {@link #successor}.</a>
+<span class="sourceLineNo">084</span><a id="line.84">   * @param nextEdge see {@link #nextEdge}.</a>
+<span class="sourceLineNo">085</span><a id="line.85">   */</a>
+<span class="sourceLineNo">086</span><a id="line.86">  Edge(final int info, final Label successor, final Edge nextEdge) {</a>
+<span class="sourceLineNo">087</span><a id="line.87">    this.info = info;</a>
+<span class="sourceLineNo">088</span><a id="line.88">    this.successor = successor;</a>
+<span class="sourceLineNo">089</span><a id="line.89">    this.nextEdge = nextEdge;</a>
+<span class="sourceLineNo">090</span><a id="line.90">  }</a>
+<span class="sourceLineNo">091</span><a id="line.91">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>
