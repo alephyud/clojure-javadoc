@@ -17,7 +17,7 @@ not already present in the source code.
 
 ## Generation
 
-The Javadoc was generated in IntelliJ IDEA based on [Clojure's source code
+This Javadoc was generated in IntelliJ IDEA based on [Clojure's source code
 repository](https://github.com/clojure/clojure/) using the following options:
 
 - Directory: `src/jvm/clojure`
