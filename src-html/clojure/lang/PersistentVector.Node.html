@@ -1,0 +1,978 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">/* rich Jul 5, 2007 */</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">package clojure.lang;</a>
+<span class="sourceLineNo">014</span><a id="line.14"></a>
+<span class="sourceLineNo">015</span><a id="line.15">import java.io.Serializable;</a>
+<span class="sourceLineNo">016</span><a id="line.16">import java.util.ArrayList;</a>
+<span class="sourceLineNo">017</span><a id="line.17">import java.util.Iterator;</a>
+<span class="sourceLineNo">018</span><a id="line.18">import java.util.List;</a>
+<span class="sourceLineNo">019</span><a id="line.19">import java.util.NoSuchElementException;</a>
+<span class="sourceLineNo">020</span><a id="line.20">import java.util.concurrent.atomic.AtomicReference;</a>
+<span class="sourceLineNo">021</span><a id="line.21"></a>
+<span class="sourceLineNo">022</span><a id="line.22">public class PersistentVector extends APersistentVector implements IObj, IEditableCollection, IReduce, IKVReduce{</a>
+<span class="sourceLineNo">023</span><a id="line.23"></a>
+<span class="sourceLineNo">024</span><a id="line.24">public static class Node implements Serializable {</a>
+<span class="sourceLineNo">025</span><a id="line.25">        transient public final AtomicReference&lt;Thread&gt; edit;</a>
+<span class="sourceLineNo">026</span><a id="line.26">        public final Object[] array;</a>
+<span class="sourceLineNo">027</span><a id="line.27"></a>
+<span class="sourceLineNo">028</span><a id="line.28">        public Node(AtomicReference&lt;Thread&gt; edit, Object[] array){</a>
+<span class="sourceLineNo">029</span><a id="line.29">                this.edit = edit;</a>
+<span class="sourceLineNo">030</span><a id="line.30">                this.array = array;</a>
+<span class="sourceLineNo">031</span><a id="line.31">        }</a>
+<span class="sourceLineNo">032</span><a id="line.32"></a>
+<span class="sourceLineNo">033</span><a id="line.33">        Node(AtomicReference&lt;Thread&gt; edit){</a>
+<span class="sourceLineNo">034</span><a id="line.34">                this.edit = edit;</a>
+<span class="sourceLineNo">035</span><a id="line.35">                this.array = new Object[32];</a>
+<span class="sourceLineNo">036</span><a id="line.36">        }</a>
+<span class="sourceLineNo">037</span><a id="line.37">}</a>
+<span class="sourceLineNo">038</span><a id="line.38"></a>
+<span class="sourceLineNo">039</span><a id="line.39">final static AtomicReference&lt;Thread&gt; NOEDIT = new AtomicReference&lt;Thread&gt;(null);</a>
+<span class="sourceLineNo">040</span><a id="line.40">public final static Node EMPTY_NODE = new Node(NOEDIT, new Object[32]);</a>
+<span class="sourceLineNo">041</span><a id="line.41"></a>
+<span class="sourceLineNo">042</span><a id="line.42">final int cnt;</a>
+<span class="sourceLineNo">043</span><a id="line.43">public final int shift;</a>
+<span class="sourceLineNo">044</span><a id="line.44">public final Node root;</a>
+<span class="sourceLineNo">045</span><a id="line.45">public final Object[] tail;</a>
+<span class="sourceLineNo">046</span><a id="line.46">final IPersistentMap _meta;</a>
+<span class="sourceLineNo">047</span><a id="line.47"></a>
+<span class="sourceLineNo">048</span><a id="line.48"></a>
+<span class="sourceLineNo">049</span><a id="line.49">public final static PersistentVector EMPTY = new PersistentVector(0, 5, EMPTY_NODE, new Object[]{});</a>
+<span class="sourceLineNo">050</span><a id="line.50"></a>
+<span class="sourceLineNo">051</span><a id="line.51">private static final IFn TRANSIENT_VECTOR_CONJ = new AFn() {</a>
+<span class="sourceLineNo">052</span><a id="line.52">    public Object invoke(Object coll, Object val) {</a>
+<span class="sourceLineNo">053</span><a id="line.53">        return ((ITransientVector)coll).conj(val);</a>
+<span class="sourceLineNo">054</span><a id="line.54">    }</a>
+<span class="sourceLineNo">055</span><a id="line.55">    public Object invoke(Object coll) {</a>
+<span class="sourceLineNo">056</span><a id="line.56">        return coll;</a>
+<span class="sourceLineNo">057</span><a id="line.57">    }</a>
+<span class="sourceLineNo">058</span><a id="line.58">};</a>
+<span class="sourceLineNo">059</span><a id="line.59"></a>
+<span class="sourceLineNo">060</span><a id="line.60">static public PersistentVector adopt(Object [] items){</a>
+<span class="sourceLineNo">061</span><a id="line.61">        return new PersistentVector(items.length, 5, EMPTY_NODE, items);</a>
+<span class="sourceLineNo">062</span><a id="line.62">}</a>
+<span class="sourceLineNo">063</span><a id="line.63"></a>
+<span class="sourceLineNo">064</span><a id="line.64">static public PersistentVector create(IReduceInit items) {</a>
+<span class="sourceLineNo">065</span><a id="line.65">    TransientVector ret = EMPTY.asTransient();</a>
+<span class="sourceLineNo">066</span><a id="line.66">    items.reduce(TRANSIENT_VECTOR_CONJ, ret);</a>
+<span class="sourceLineNo">067</span><a id="line.67">    return ret.persistent();</a>
+<span class="sourceLineNo">068</span><a id="line.68">}</a>
+<span class="sourceLineNo">069</span><a id="line.69"></a>
+<span class="sourceLineNo">070</span><a id="line.70">static public PersistentVector create(ISeq items){</a>
+<span class="sourceLineNo">071</span><a id="line.71">    Object[] arr = new Object[32];</a>
+<span class="sourceLineNo">072</span><a id="line.72">    int i = 0;</a>
+<span class="sourceLineNo">073</span><a id="line.73">    for(;items != null &amp;&amp; i &lt; 32; items = items.next())</a>
+<span class="sourceLineNo">074</span><a id="line.74">        arr[i++] = items.first();</a>
+<span class="sourceLineNo">075</span><a id="line.75"></a>
+<span class="sourceLineNo">076</span><a id="line.76">    if(items != null) {  // &gt;32, construct with array directly</a>
+<span class="sourceLineNo">077</span><a id="line.77">        PersistentVector start = new PersistentVector(32, 5, EMPTY_NODE, arr);</a>
+<span class="sourceLineNo">078</span><a id="line.78">        TransientVector ret = start.asTransient();</a>
+<span class="sourceLineNo">079</span><a id="line.79">        for (; items != null; items = items.next())</a>
+<span class="sourceLineNo">080</span><a id="line.80">            ret = ret.conj(items.first());</a>
+<span class="sourceLineNo">081</span><a id="line.81">        return ret.persistent();</a>
+<span class="sourceLineNo">082</span><a id="line.82">    } else if(i == 32) {   // exactly 32, skip copy</a>
+<span class="sourceLineNo">083</span><a id="line.83">        return new PersistentVector(32, 5, EMPTY_NODE, arr);</a>
+<span class="sourceLineNo">084</span><a id="line.84">    } else {  // &lt;32, copy to minimum array and construct</a>
+<span class="sourceLineNo">085</span><a id="line.85">        Object[] arr2 = new Object[i];</a>
+<span class="sourceLineNo">086</span><a id="line.86">        System.arraycopy(arr, 0, arr2, 0, i);</a>
+<span class="sourceLineNo">087</span><a id="line.87">        return new PersistentVector(i, 5, EMPTY_NODE, arr2);</a>
+<span class="sourceLineNo">088</span><a id="line.88">    }</a>
+<span class="sourceLineNo">089</span><a id="line.89">}</a>
+<span class="sourceLineNo">090</span><a id="line.90"></a>
+<span class="sourceLineNo">091</span><a id="line.91">static public PersistentVector create(List list){</a>
+<span class="sourceLineNo">092</span><a id="line.92">    int size = list.size();</a>
+<span class="sourceLineNo">093</span><a id="line.93">    if (size &lt;= 32)</a>
+<span class="sourceLineNo">094</span><a id="line.94">        return new PersistentVector(size, 5, PersistentVector.EMPTY_NODE, list.toArray());</a>
+<span class="sourceLineNo">095</span><a id="line.95"></a>
+<span class="sourceLineNo">096</span><a id="line.96">    TransientVector ret = EMPTY.asTransient();</a>
+<span class="sourceLineNo">097</span><a id="line.97">    for(int i=0; i&lt;size; i++)</a>
+<span class="sourceLineNo">098</span><a id="line.98">        ret = ret.conj(list.get(i));</a>
+<span class="sourceLineNo">099</span><a id="line.99">    return ret.persistent();</a>
+<span class="sourceLineNo">100</span><a id="line.100">}</a>
+<span class="sourceLineNo">101</span><a id="line.101"></a>
+<span class="sourceLineNo">102</span><a id="line.102">static public PersistentVector create(Iterable items){</a>
+<span class="sourceLineNo">103</span><a id="line.103">    // optimize common case</a>
+<span class="sourceLineNo">104</span><a id="line.104">    if(items instanceof ArrayList)</a>
+<span class="sourceLineNo">105</span><a id="line.105">        return create((ArrayList)items);</a>
+<span class="sourceLineNo">106</span><a id="line.106"></a>
+<span class="sourceLineNo">107</span><a id="line.107">    Iterator iter = items.iterator();</a>
+<span class="sourceLineNo">108</span><a id="line.108">    TransientVector ret = EMPTY.asTransient();</a>
+<span class="sourceLineNo">109</span><a id="line.109">    while(iter.hasNext())</a>
+<span class="sourceLineNo">110</span><a id="line.110">        ret = ret.conj(iter.next());</a>
+<span class="sourceLineNo">111</span><a id="line.111">    return ret.persistent();</a>
+<span class="sourceLineNo">112</span><a id="line.112">}</a>
+<span class="sourceLineNo">113</span><a id="line.113"></a>
+<span class="sourceLineNo">114</span><a id="line.114">static public PersistentVector create(Object... items){</a>
+<span class="sourceLineNo">115</span><a id="line.115">        TransientVector ret = EMPTY.asTransient();</a>
+<span class="sourceLineNo">116</span><a id="line.116">        for(Object item : items)</a>
+<span class="sourceLineNo">117</span><a id="line.117">                ret = ret.conj(item);</a>
+<span class="sourceLineNo">118</span><a id="line.118">        return ret.persistent();</a>
+<span class="sourceLineNo">119</span><a id="line.119">}</a>
+<span class="sourceLineNo">120</span><a id="line.120"></a>
+<span class="sourceLineNo">121</span><a id="line.121">PersistentVector(int cnt, int shift, Node root, Object[] tail){</a>
+<span class="sourceLineNo">122</span><a id="line.122">        this._meta = null;</a>
+<span class="sourceLineNo">123</span><a id="line.123">        this.cnt = cnt;</a>
+<span class="sourceLineNo">124</span><a id="line.124">        this.shift = shift;</a>
+<span class="sourceLineNo">125</span><a id="line.125">        this.root = root;</a>
+<span class="sourceLineNo">126</span><a id="line.126">        this.tail = tail;</a>
+<span class="sourceLineNo">127</span><a id="line.127">}</a>
+<span class="sourceLineNo">128</span><a id="line.128"></a>
+<span class="sourceLineNo">129</span><a id="line.129"></a>
+<span class="sourceLineNo">130</span><a id="line.130">PersistentVector(IPersistentMap meta, int cnt, int shift, Node root, Object[] tail){</a>
+<span class="sourceLineNo">131</span><a id="line.131">        this._meta = meta;</a>
+<span class="sourceLineNo">132</span><a id="line.132">        this.cnt = cnt;</a>
+<span class="sourceLineNo">133</span><a id="line.133">        this.shift = shift;</a>
+<span class="sourceLineNo">134</span><a id="line.134">        this.root = root;</a>
+<span class="sourceLineNo">135</span><a id="line.135">        this.tail = tail;</a>
+<span class="sourceLineNo">136</span><a id="line.136">}</a>
+<span class="sourceLineNo">137</span><a id="line.137"></a>
+<span class="sourceLineNo">138</span><a id="line.138">public TransientVector asTransient(){</a>
+<span class="sourceLineNo">139</span><a id="line.139">        return new TransientVector(this);</a>
+<span class="sourceLineNo">140</span><a id="line.140">}</a>
+<span class="sourceLineNo">141</span><a id="line.141"></a>
+<span class="sourceLineNo">142</span><a id="line.142">final int tailoff(){</a>
+<span class="sourceLineNo">143</span><a id="line.143">        if(cnt &lt; 32)</a>
+<span class="sourceLineNo">144</span><a id="line.144">                return 0;</a>
+<span class="sourceLineNo">145</span><a id="line.145">        return ((cnt - 1) &gt;&gt;&gt; 5) &lt;&lt; 5;</a>
+<span class="sourceLineNo">146</span><a id="line.146">}</a>
+<span class="sourceLineNo">147</span><a id="line.147"></a>
+<span class="sourceLineNo">148</span><a id="line.148">public Object[] arrayFor(int i){</a>
+<span class="sourceLineNo">149</span><a id="line.149">        if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">150</span><a id="line.150">                {</a>
+<span class="sourceLineNo">151</span><a id="line.151">                if(i &gt;= tailoff())</a>
+<span class="sourceLineNo">152</span><a id="line.152">                        return tail;</a>
+<span class="sourceLineNo">153</span><a id="line.153">                Node node = root;</a>
+<span class="sourceLineNo">154</span><a id="line.154">                for(int level = shift; level &gt; 0; level -= 5)</a>
+<span class="sourceLineNo">155</span><a id="line.155">                        node = (Node) node.array[(i &gt;&gt;&gt; level) &amp; 0x01f];</a>
+<span class="sourceLineNo">156</span><a id="line.156">                return node.array;</a>
+<span class="sourceLineNo">157</span><a id="line.157">                }</a>
+<span class="sourceLineNo">158</span><a id="line.158">        throw new IndexOutOfBoundsException();</a>
+<span class="sourceLineNo">159</span><a id="line.159">}</a>
+<span class="sourceLineNo">160</span><a id="line.160"></a>
+<span class="sourceLineNo">161</span><a id="line.161">public Object nth(int i){</a>
+<span class="sourceLineNo">162</span><a id="line.162">        Object[] node = arrayFor(i);</a>
+<span class="sourceLineNo">163</span><a id="line.163">        return node[i &amp; 0x01f];</a>
+<span class="sourceLineNo">164</span><a id="line.164">}</a>
+<span class="sourceLineNo">165</span><a id="line.165"></a>
+<span class="sourceLineNo">166</span><a id="line.166">public Object nth(int i, Object notFound){</a>
+<span class="sourceLineNo">167</span><a id="line.167">        if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">168</span><a id="line.168">                return nth(i);</a>
+<span class="sourceLineNo">169</span><a id="line.169">        return notFound;</a>
+<span class="sourceLineNo">170</span><a id="line.170">}</a>
+<span class="sourceLineNo">171</span><a id="line.171"></a>
+<span class="sourceLineNo">172</span><a id="line.172">public PersistentVector assocN(int i, Object val){</a>
+<span class="sourceLineNo">173</span><a id="line.173">        if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">174</span><a id="line.174">                {</a>
+<span class="sourceLineNo">175</span><a id="line.175">                if(i &gt;= tailoff())</a>
+<span class="sourceLineNo">176</span><a id="line.176">                        {</a>
+<span class="sourceLineNo">177</span><a id="line.177">                        Object[] newTail = new Object[tail.length];</a>
+<span class="sourceLineNo">178</span><a id="line.178">                        System.arraycopy(tail, 0, newTail, 0, tail.length);</a>
+<span class="sourceLineNo">179</span><a id="line.179">                        newTail[i &amp; 0x01f] = val;</a>
+<span class="sourceLineNo">180</span><a id="line.180"></a>
+<span class="sourceLineNo">181</span><a id="line.181">                        return new PersistentVector(meta(), cnt, shift, root, newTail);</a>
+<span class="sourceLineNo">182</span><a id="line.182">                        }</a>
+<span class="sourceLineNo">183</span><a id="line.183"></a>
+<span class="sourceLineNo">184</span><a id="line.184">                return new PersistentVector(meta(), cnt, shift, doAssoc(shift, root, i, val), tail);</a>
+<span class="sourceLineNo">185</span><a id="line.185">                }</a>
+<span class="sourceLineNo">186</span><a id="line.186">        if(i == cnt)</a>
+<span class="sourceLineNo">187</span><a id="line.187">                return cons(val);</a>
+<span class="sourceLineNo">188</span><a id="line.188">        throw new IndexOutOfBoundsException();</a>
+<span class="sourceLineNo">189</span><a id="line.189">}</a>
+<span class="sourceLineNo">190</span><a id="line.190"></a>
+<span class="sourceLineNo">191</span><a id="line.191">private static Node doAssoc(int level, Node node, int i, Object val){</a>
+<span class="sourceLineNo">192</span><a id="line.192">        Node ret = new Node(node.edit,node.array.clone());</a>
+<span class="sourceLineNo">193</span><a id="line.193">        if(level == 0)</a>
+<span class="sourceLineNo">194</span><a id="line.194">                {</a>
+<span class="sourceLineNo">195</span><a id="line.195">                ret.array[i &amp; 0x01f] = val;</a>
+<span class="sourceLineNo">196</span><a id="line.196">                }</a>
+<span class="sourceLineNo">197</span><a id="line.197">        else</a>
+<span class="sourceLineNo">198</span><a id="line.198">                {</a>
+<span class="sourceLineNo">199</span><a id="line.199">                int subidx = (i &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">200</span><a id="line.200">                ret.array[subidx] = doAssoc(level - 5, (Node) node.array[subidx], i, val);</a>
+<span class="sourceLineNo">201</span><a id="line.201">                }</a>
+<span class="sourceLineNo">202</span><a id="line.202">        return ret;</a>
+<span class="sourceLineNo">203</span><a id="line.203">}</a>
+<span class="sourceLineNo">204</span><a id="line.204"></a>
+<span class="sourceLineNo">205</span><a id="line.205">public int count(){</a>
+<span class="sourceLineNo">206</span><a id="line.206">        return cnt;</a>
+<span class="sourceLineNo">207</span><a id="line.207">}</a>
+<span class="sourceLineNo">208</span><a id="line.208"></a>
+<span class="sourceLineNo">209</span><a id="line.209">public PersistentVector withMeta(IPersistentMap meta){</a>
+<span class="sourceLineNo">210</span><a id="line.210">        if(meta() == meta)</a>
+<span class="sourceLineNo">211</span><a id="line.211">                return this;</a>
+<span class="sourceLineNo">212</span><a id="line.212">        return new PersistentVector(meta, cnt, shift, root, tail);</a>
+<span class="sourceLineNo">213</span><a id="line.213">}</a>
+<span class="sourceLineNo">214</span><a id="line.214"></a>
+<span class="sourceLineNo">215</span><a id="line.215">public IPersistentMap meta(){</a>
+<span class="sourceLineNo">216</span><a id="line.216">        return _meta;</a>
+<span class="sourceLineNo">217</span><a id="line.217">}</a>
+<span class="sourceLineNo">218</span><a id="line.218"></a>
+<span class="sourceLineNo">219</span><a id="line.219"></a>
+<span class="sourceLineNo">220</span><a id="line.220">public PersistentVector cons(Object val){</a>
+<span class="sourceLineNo">221</span><a id="line.221">        //room in tail?</a>
+<span class="sourceLineNo">222</span><a id="line.222">//      if(tail.length &lt; 32)</a>
+<span class="sourceLineNo">223</span><a id="line.223">        if(cnt - tailoff() &lt; 32)</a>
+<span class="sourceLineNo">224</span><a id="line.224">                {</a>
+<span class="sourceLineNo">225</span><a id="line.225">                Object[] newTail = new Object[tail.length + 1];</a>
+<span class="sourceLineNo">226</span><a id="line.226">                System.arraycopy(tail, 0, newTail, 0, tail.length);</a>
+<span class="sourceLineNo">227</span><a id="line.227">                newTail[tail.length] = val;</a>
+<span class="sourceLineNo">228</span><a id="line.228">                return new PersistentVector(meta(), cnt + 1, shift, root, newTail);</a>
+<span class="sourceLineNo">229</span><a id="line.229">                }</a>
+<span class="sourceLineNo">230</span><a id="line.230">        //full tail, push into tree</a>
+<span class="sourceLineNo">231</span><a id="line.231">        Node newroot;</a>
+<span class="sourceLineNo">232</span><a id="line.232">        Node tailnode = new Node(root.edit,tail);</a>
+<span class="sourceLineNo">233</span><a id="line.233">        int newshift = shift;</a>
+<span class="sourceLineNo">234</span><a id="line.234">        //overflow root?</a>
+<span class="sourceLineNo">235</span><a id="line.235">        if((cnt &gt;&gt;&gt; 5) &gt; (1 &lt;&lt; shift))</a>
+<span class="sourceLineNo">236</span><a id="line.236">                {</a>
+<span class="sourceLineNo">237</span><a id="line.237">                newroot = new Node(root.edit);</a>
+<span class="sourceLineNo">238</span><a id="line.238">                newroot.array[0] = root;</a>
+<span class="sourceLineNo">239</span><a id="line.239">                newroot.array[1] = newPath(root.edit,shift, tailnode);</a>
+<span class="sourceLineNo">240</span><a id="line.240">                newshift += 5;</a>
+<span class="sourceLineNo">241</span><a id="line.241">                }</a>
+<span class="sourceLineNo">242</span><a id="line.242">        else</a>
+<span class="sourceLineNo">243</span><a id="line.243">                newroot = pushTail(shift, root, tailnode);</a>
+<span class="sourceLineNo">244</span><a id="line.244">        return new PersistentVector(meta(), cnt + 1, newshift, newroot, new Object[]{val});</a>
+<span class="sourceLineNo">245</span><a id="line.245">}</a>
+<span class="sourceLineNo">246</span><a id="line.246"></a>
+<span class="sourceLineNo">247</span><a id="line.247">private Node pushTail(int level, Node parent, Node tailnode){</a>
+<span class="sourceLineNo">248</span><a id="line.248">        //if parent is leaf, insert node,</a>
+<span class="sourceLineNo">249</span><a id="line.249">        // else does it map to an existing child? -&gt; nodeToInsert = pushNode one more level</a>
+<span class="sourceLineNo">250</span><a id="line.250">        // else alloc new path</a>
+<span class="sourceLineNo">251</span><a id="line.251">        //return  nodeToInsert placed in copy of parent</a>
+<span class="sourceLineNo">252</span><a id="line.252">        int subidx = ((cnt - 1) &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">253</span><a id="line.253">        Node ret = new Node(parent.edit, parent.array.clone());</a>
+<span class="sourceLineNo">254</span><a id="line.254">        Node nodeToInsert;</a>
+<span class="sourceLineNo">255</span><a id="line.255">        if(level == 5)</a>
+<span class="sourceLineNo">256</span><a id="line.256">                {</a>
+<span class="sourceLineNo">257</span><a id="line.257">                nodeToInsert = tailnode;</a>
+<span class="sourceLineNo">258</span><a id="line.258">                }</a>
+<span class="sourceLineNo">259</span><a id="line.259">        else</a>
+<span class="sourceLineNo">260</span><a id="line.260">                {</a>
+<span class="sourceLineNo">261</span><a id="line.261">                Node child = (Node) parent.array[subidx];</a>
+<span class="sourceLineNo">262</span><a id="line.262">                nodeToInsert = (child != null)?</a>
+<span class="sourceLineNo">263</span><a id="line.263">                                pushTail(level-5,child, tailnode)</a>
+<span class="sourceLineNo">264</span><a id="line.264">                                :newPath(root.edit,level-5, tailnode);</a>
+<span class="sourceLineNo">265</span><a id="line.265">                }</a>
+<span class="sourceLineNo">266</span><a id="line.266">        ret.array[subidx] = nodeToInsert;</a>
+<span class="sourceLineNo">267</span><a id="line.267">        return ret;</a>
+<span class="sourceLineNo">268</span><a id="line.268">}</a>
+<span class="sourceLineNo">269</span><a id="line.269"></a>
+<span class="sourceLineNo">270</span><a id="line.270">private static Node newPath(AtomicReference&lt;Thread&gt; edit,int level, Node node){</a>
+<span class="sourceLineNo">271</span><a id="line.271">        if(level == 0)</a>
+<span class="sourceLineNo">272</span><a id="line.272">                return node;</a>
+<span class="sourceLineNo">273</span><a id="line.273">        Node ret = new Node(edit);</a>
+<span class="sourceLineNo">274</span><a id="line.274">        ret.array[0] = newPath(edit, level - 5, node);</a>
+<span class="sourceLineNo">275</span><a id="line.275">        return ret;</a>
+<span class="sourceLineNo">276</span><a id="line.276">}</a>
+<span class="sourceLineNo">277</span><a id="line.277"></a>
+<span class="sourceLineNo">278</span><a id="line.278">public IChunkedSeq chunkedSeq(){</a>
+<span class="sourceLineNo">279</span><a id="line.279">        if(count() == 0)</a>
+<span class="sourceLineNo">280</span><a id="line.280">                return null;</a>
+<span class="sourceLineNo">281</span><a id="line.281">        return new ChunkedSeq(this,0,0);</a>
+<span class="sourceLineNo">282</span><a id="line.282">}</a>
+<span class="sourceLineNo">283</span><a id="line.283"></a>
+<span class="sourceLineNo">284</span><a id="line.284">public ISeq seq(){</a>
+<span class="sourceLineNo">285</span><a id="line.285">        return chunkedSeq();</a>
+<span class="sourceLineNo">286</span><a id="line.286">}</a>
+<span class="sourceLineNo">287</span><a id="line.287"></a>
+<span class="sourceLineNo">288</span><a id="line.288">@Override</a>
+<span class="sourceLineNo">289</span><a id="line.289">Iterator rangedIterator(final int start, final int end){</a>
+<span class="sourceLineNo">290</span><a id="line.290">        return new Iterator(){</a>
+<span class="sourceLineNo">291</span><a id="line.291">                int i = start;</a>
+<span class="sourceLineNo">292</span><a id="line.292">                int base = i - (i%32);</a>
+<span class="sourceLineNo">293</span><a id="line.293">                Object[] array = (start &lt; count())?arrayFor(i):null;</a>
+<span class="sourceLineNo">294</span><a id="line.294"></a>
+<span class="sourceLineNo">295</span><a id="line.295">                public boolean hasNext(){</a>
+<span class="sourceLineNo">296</span><a id="line.296">                        return i &lt; end;</a>
+<span class="sourceLineNo">297</span><a id="line.297">                        }</a>
+<span class="sourceLineNo">298</span><a id="line.298"></a>
+<span class="sourceLineNo">299</span><a id="line.299">                public Object next(){</a>
+<span class="sourceLineNo">300</span><a id="line.300">                        if(i &lt; end) {</a>
+<span class="sourceLineNo">301</span><a id="line.301">                                if(i-base == 32){</a>
+<span class="sourceLineNo">302</span><a id="line.302">                                        array = arrayFor(i);</a>
+<span class="sourceLineNo">303</span><a id="line.303">                                        base += 32;</a>
+<span class="sourceLineNo">304</span><a id="line.304">                                }</a>
+<span class="sourceLineNo">305</span><a id="line.305">                                return array[i++ &amp; 0x01f];</a>
+<span class="sourceLineNo">306</span><a id="line.306">                        } else {</a>
+<span class="sourceLineNo">307</span><a id="line.307">                                throw new NoSuchElementException();</a>
+<span class="sourceLineNo">308</span><a id="line.308">                        }</a>
+<span class="sourceLineNo">309</span><a id="line.309">                }</a>
+<span class="sourceLineNo">310</span><a id="line.310"></a>
+<span class="sourceLineNo">311</span><a id="line.311">                public void remove(){</a>
+<span class="sourceLineNo">312</span><a id="line.312">                        throw new UnsupportedOperationException();</a>
+<span class="sourceLineNo">313</span><a id="line.313">                }</a>
+<span class="sourceLineNo">314</span><a id="line.314">        };</a>
+<span class="sourceLineNo">315</span><a id="line.315">}</a>
+<span class="sourceLineNo">316</span><a id="line.316"></a>
+<span class="sourceLineNo">317</span><a id="line.317">public Iterator iterator(){return rangedIterator(0,count());}</a>
+<span class="sourceLineNo">318</span><a id="line.318"></a>
+<span class="sourceLineNo">319</span><a id="line.319">public Object reduce(IFn f){</a>
+<span class="sourceLineNo">320</span><a id="line.320">    Object init;</a>
+<span class="sourceLineNo">321</span><a id="line.321">    if (cnt &gt; 0)</a>
+<span class="sourceLineNo">322</span><a id="line.322">        init = arrayFor(0)[0];</a>
+<span class="sourceLineNo">323</span><a id="line.323">    else</a>
+<span class="sourceLineNo">324</span><a id="line.324">        return f.invoke();</a>
+<span class="sourceLineNo">325</span><a id="line.325">    int step = 0;</a>
+<span class="sourceLineNo">326</span><a id="line.326">    for(int i=0;i&lt;cnt;i+=step){</a>
+<span class="sourceLineNo">327</span><a id="line.327">        Object[] array = arrayFor(i);</a>
+<span class="sourceLineNo">328</span><a id="line.328">        for(int j = (i==0)?1:0;j&lt;array.length;++j){</a>
+<span class="sourceLineNo">329</span><a id="line.329">            init = f.invoke(init,array[j]);</a>
+<span class="sourceLineNo">330</span><a id="line.330">            if(RT.isReduced(init))</a>
+<span class="sourceLineNo">331</span><a id="line.331">                    return ((IDeref)init).deref();</a>
+<span class="sourceLineNo">332</span><a id="line.332">            }</a>
+<span class="sourceLineNo">333</span><a id="line.333">        step = array.length;</a>
+<span class="sourceLineNo">334</span><a id="line.334">    }</a>
+<span class="sourceLineNo">335</span><a id="line.335">    return init;</a>
+<span class="sourceLineNo">336</span><a id="line.336">}</a>
+<span class="sourceLineNo">337</span><a id="line.337"></a>
+<span class="sourceLineNo">338</span><a id="line.338">public Object reduce(IFn f, Object init){</a>
+<span class="sourceLineNo">339</span><a id="line.339">    int step = 0;</a>
+<span class="sourceLineNo">340</span><a id="line.340">    for(int i=0;i&lt;cnt;i+=step){</a>
+<span class="sourceLineNo">341</span><a id="line.341">        Object[] array = arrayFor(i);</a>
+<span class="sourceLineNo">342</span><a id="line.342">        for(int j =0;j&lt;array.length;++j){</a>
+<span class="sourceLineNo">343</span><a id="line.343">            init = f.invoke(init,array[j]);</a>
+<span class="sourceLineNo">344</span><a id="line.344">            if(RT.isReduced(init))</a>
+<span class="sourceLineNo">345</span><a id="line.345">                    return ((IDeref)init).deref();</a>
+<span class="sourceLineNo">346</span><a id="line.346">            }</a>
+<span class="sourceLineNo">347</span><a id="line.347">        step = array.length;</a>
+<span class="sourceLineNo">348</span><a id="line.348">    }</a>
+<span class="sourceLineNo">349</span><a id="line.349">    return init;</a>
+<span class="sourceLineNo">350</span><a id="line.350">}</a>
+<span class="sourceLineNo">351</span><a id="line.351"></a>
+<span class="sourceLineNo">352</span><a id="line.352">public Object kvreduce(IFn f, Object init){</a>
+<span class="sourceLineNo">353</span><a id="line.353">    int step = 0;</a>
+<span class="sourceLineNo">354</span><a id="line.354">    for(int i=0;i&lt;cnt;i+=step){</a>
+<span class="sourceLineNo">355</span><a id="line.355">        Object[] array = arrayFor(i);</a>
+<span class="sourceLineNo">356</span><a id="line.356">        for(int j =0;j&lt;array.length;++j){</a>
+<span class="sourceLineNo">357</span><a id="line.357">            init = f.invoke(init,j+i,array[j]);</a>
+<span class="sourceLineNo">358</span><a id="line.358">            if(RT.isReduced(init))</a>
+<span class="sourceLineNo">359</span><a id="line.359">                    return ((IDeref)init).deref();</a>
+<span class="sourceLineNo">360</span><a id="line.360">            }</a>
+<span class="sourceLineNo">361</span><a id="line.361">        step = array.length;</a>
+<span class="sourceLineNo">362</span><a id="line.362">    }</a>
+<span class="sourceLineNo">363</span><a id="line.363">    return init;</a>
+<span class="sourceLineNo">364</span><a id="line.364">}</a>
+<span class="sourceLineNo">365</span><a id="line.365"></a>
+<span class="sourceLineNo">366</span><a id="line.366">static public final class ChunkedSeq extends ASeq implements IChunkedSeq,Counted{</a>
+<span class="sourceLineNo">367</span><a id="line.367"></a>
+<span class="sourceLineNo">368</span><a id="line.368">        public final PersistentVector vec;</a>
+<span class="sourceLineNo">369</span><a id="line.369">        final Object[] node;</a>
+<span class="sourceLineNo">370</span><a id="line.370">        final int i;</a>
+<span class="sourceLineNo">371</span><a id="line.371">        public final int offset;</a>
+<span class="sourceLineNo">372</span><a id="line.372"></a>
+<span class="sourceLineNo">373</span><a id="line.373">        public ChunkedSeq(PersistentVector vec, int i, int offset){</a>
+<span class="sourceLineNo">374</span><a id="line.374">                this.vec = vec;</a>
+<span class="sourceLineNo">375</span><a id="line.375">                this.i = i;</a>
+<span class="sourceLineNo">376</span><a id="line.376">                this.offset = offset;</a>
+<span class="sourceLineNo">377</span><a id="line.377">                this.node = vec.arrayFor(i);</a>
+<span class="sourceLineNo">378</span><a id="line.378">        }</a>
+<span class="sourceLineNo">379</span><a id="line.379"></a>
+<span class="sourceLineNo">380</span><a id="line.380">        ChunkedSeq(IPersistentMap meta, PersistentVector vec, Object[] node, int i, int offset){</a>
+<span class="sourceLineNo">381</span><a id="line.381">                super(meta);</a>
+<span class="sourceLineNo">382</span><a id="line.382">                this.vec = vec;</a>
+<span class="sourceLineNo">383</span><a id="line.383">                this.node = node;</a>
+<span class="sourceLineNo">384</span><a id="line.384">                this.i = i;</a>
+<span class="sourceLineNo">385</span><a id="line.385">                this.offset = offset;</a>
+<span class="sourceLineNo">386</span><a id="line.386">        }</a>
+<span class="sourceLineNo">387</span><a id="line.387"></a>
+<span class="sourceLineNo">388</span><a id="line.388">        ChunkedSeq(PersistentVector vec, Object[] node, int i, int offset){</a>
+<span class="sourceLineNo">389</span><a id="line.389">                this.vec = vec;</a>
+<span class="sourceLineNo">390</span><a id="line.390">                this.node = node;</a>
+<span class="sourceLineNo">391</span><a id="line.391">                this.i = i;</a>
+<span class="sourceLineNo">392</span><a id="line.392">                this.offset = offset;</a>
+<span class="sourceLineNo">393</span><a id="line.393">        }</a>
+<span class="sourceLineNo">394</span><a id="line.394"></a>
+<span class="sourceLineNo">395</span><a id="line.395">        public IChunk chunkedFirst() {</a>
+<span class="sourceLineNo">396</span><a id="line.396">                return new ArrayChunk(node, offset);</a>
+<span class="sourceLineNo">397</span><a id="line.397">                }</a>
+<span class="sourceLineNo">398</span><a id="line.398"></a>
+<span class="sourceLineNo">399</span><a id="line.399">        public ISeq chunkedNext(){</a>
+<span class="sourceLineNo">400</span><a id="line.400">                if(i + node.length &lt; vec.cnt)</a>
+<span class="sourceLineNo">401</span><a id="line.401">                        return new ChunkedSeq(vec,i+ node.length,0);</a>
+<span class="sourceLineNo">402</span><a id="line.402">                return null;</a>
+<span class="sourceLineNo">403</span><a id="line.403">                }</a>
+<span class="sourceLineNo">404</span><a id="line.404"></a>
+<span class="sourceLineNo">405</span><a id="line.405">        public ISeq chunkedMore(){</a>
+<span class="sourceLineNo">406</span><a id="line.406">                ISeq s = chunkedNext();</a>
+<span class="sourceLineNo">407</span><a id="line.407">                if(s == null)</a>
+<span class="sourceLineNo">408</span><a id="line.408">                        return PersistentList.EMPTY;</a>
+<span class="sourceLineNo">409</span><a id="line.409">                return s;</a>
+<span class="sourceLineNo">410</span><a id="line.410">        }</a>
+<span class="sourceLineNo">411</span><a id="line.411"></a>
+<span class="sourceLineNo">412</span><a id="line.412">        public Obj withMeta(IPersistentMap meta){</a>
+<span class="sourceLineNo">413</span><a id="line.413">                if(meta == this._meta)</a>
+<span class="sourceLineNo">414</span><a id="line.414">                        return this;</a>
+<span class="sourceLineNo">415</span><a id="line.415">                return new ChunkedSeq(meta, vec, node, i, offset);</a>
+<span class="sourceLineNo">416</span><a id="line.416">        }</a>
+<span class="sourceLineNo">417</span><a id="line.417"></a>
+<span class="sourceLineNo">418</span><a id="line.418">        public Object first(){</a>
+<span class="sourceLineNo">419</span><a id="line.419">                return node[offset];</a>
+<span class="sourceLineNo">420</span><a id="line.420">        }</a>
+<span class="sourceLineNo">421</span><a id="line.421"></a>
+<span class="sourceLineNo">422</span><a id="line.422">        public ISeq next(){</a>
+<span class="sourceLineNo">423</span><a id="line.423">                if(offset + 1 &lt; node.length)</a>
+<span class="sourceLineNo">424</span><a id="line.424">                        return new ChunkedSeq(vec, node, i, offset + 1);</a>
+<span class="sourceLineNo">425</span><a id="line.425">                return chunkedNext();</a>
+<span class="sourceLineNo">426</span><a id="line.426">        }</a>
+<span class="sourceLineNo">427</span><a id="line.427"></a>
+<span class="sourceLineNo">428</span><a id="line.428">        public int count(){</a>
+<span class="sourceLineNo">429</span><a id="line.429">                return vec.cnt - (i + offset);</a>
+<span class="sourceLineNo">430</span><a id="line.430">        }</a>
+<span class="sourceLineNo">431</span><a id="line.431">}</a>
+<span class="sourceLineNo">432</span><a id="line.432"></a>
+<span class="sourceLineNo">433</span><a id="line.433">public IPersistentCollection empty(){</a>
+<span class="sourceLineNo">434</span><a id="line.434">        return EMPTY.withMeta(meta());</a>
+<span class="sourceLineNo">435</span><a id="line.435">}</a>
+<span class="sourceLineNo">436</span><a id="line.436"></a>
+<span class="sourceLineNo">437</span><a id="line.437">//private Node pushTail(int level, Node node, Object[] tailNode, Box expansion){</a>
+<span class="sourceLineNo">438</span><a id="line.438">//      Object newchild;</a>
+<span class="sourceLineNo">439</span><a id="line.439">//      if(level == 0)</a>
+<span class="sourceLineNo">440</span><a id="line.440">//              {</a>
+<span class="sourceLineNo">441</span><a id="line.441">//              newchild = tailNode;</a>
+<span class="sourceLineNo">442</span><a id="line.442">//              }</a>
+<span class="sourceLineNo">443</span><a id="line.443">//      else</a>
+<span class="sourceLineNo">444</span><a id="line.444">//              {</a>
+<span class="sourceLineNo">445</span><a id="line.445">//              newchild = pushTail(level - 5, (Object[]) arr[arr.length - 1], tailNode, expansion);</a>
+<span class="sourceLineNo">446</span><a id="line.446">//              if(expansion.val == null)</a>
+<span class="sourceLineNo">447</span><a id="line.447">//                      {</a>
+<span class="sourceLineNo">448</span><a id="line.448">//                      Object[] ret = arr.clone();</a>
+<span class="sourceLineNo">449</span><a id="line.449">//                      ret[arr.length - 1] = newchild;</a>
+<span class="sourceLineNo">450</span><a id="line.450">//                      return ret;</a>
+<span class="sourceLineNo">451</span><a id="line.451">//                      }</a>
+<span class="sourceLineNo">452</span><a id="line.452">//              else</a>
+<span class="sourceLineNo">453</span><a id="line.453">//                      newchild = expansion.val;</a>
+<span class="sourceLineNo">454</span><a id="line.454">//              }</a>
+<span class="sourceLineNo">455</span><a id="line.455">//      //expansion</a>
+<span class="sourceLineNo">456</span><a id="line.456">//      if(arr.length == 32)</a>
+<span class="sourceLineNo">457</span><a id="line.457">//              {</a>
+<span class="sourceLineNo">458</span><a id="line.458">//              expansion.val = new Object[]{newchild};</a>
+<span class="sourceLineNo">459</span><a id="line.459">//              return arr;</a>
+<span class="sourceLineNo">460</span><a id="line.460">//              }</a>
+<span class="sourceLineNo">461</span><a id="line.461">//      Object[] ret = new Object[arr.length + 1];</a>
+<span class="sourceLineNo">462</span><a id="line.462">//      System.arraycopy(arr, 0, ret, 0, arr.length);</a>
+<span class="sourceLineNo">463</span><a id="line.463">//      ret[arr.length] = newchild;</a>
+<span class="sourceLineNo">464</span><a id="line.464">//      expansion.val = null;</a>
+<span class="sourceLineNo">465</span><a id="line.465">//      return ret;</a>
+<span class="sourceLineNo">466</span><a id="line.466">//}</a>
+<span class="sourceLineNo">467</span><a id="line.467"></a>
+<span class="sourceLineNo">468</span><a id="line.468">public PersistentVector pop(){</a>
+<span class="sourceLineNo">469</span><a id="line.469">        if(cnt == 0)</a>
+<span class="sourceLineNo">470</span><a id="line.470">                throw new IllegalStateException("Can't pop empty vector");</a>
+<span class="sourceLineNo">471</span><a id="line.471">        if(cnt == 1)</a>
+<span class="sourceLineNo">472</span><a id="line.472">                return EMPTY.withMeta(meta());</a>
+<span class="sourceLineNo">473</span><a id="line.473">        //if(tail.length &gt; 1)</a>
+<span class="sourceLineNo">474</span><a id="line.474">        if(cnt-tailoff() &gt; 1)</a>
+<span class="sourceLineNo">475</span><a id="line.475">                {</a>
+<span class="sourceLineNo">476</span><a id="line.476">                Object[] newTail = new Object[tail.length - 1];</a>
+<span class="sourceLineNo">477</span><a id="line.477">                System.arraycopy(tail, 0, newTail, 0, newTail.length);</a>
+<span class="sourceLineNo">478</span><a id="line.478">                return new PersistentVector(meta(), cnt - 1, shift, root, newTail);</a>
+<span class="sourceLineNo">479</span><a id="line.479">                }</a>
+<span class="sourceLineNo">480</span><a id="line.480">        Object[] newtail = arrayFor(cnt - 2);</a>
+<span class="sourceLineNo">481</span><a id="line.481"></a>
+<span class="sourceLineNo">482</span><a id="line.482">        Node newroot = popTail(shift, root);</a>
+<span class="sourceLineNo">483</span><a id="line.483">        int newshift = shift;</a>
+<span class="sourceLineNo">484</span><a id="line.484">        if(newroot == null)</a>
+<span class="sourceLineNo">485</span><a id="line.485">                {</a>
+<span class="sourceLineNo">486</span><a id="line.486">                newroot = EMPTY_NODE;</a>
+<span class="sourceLineNo">487</span><a id="line.487">                }</a>
+<span class="sourceLineNo">488</span><a id="line.488">        if(shift &gt; 5 &amp;&amp; newroot.array[1] == null)</a>
+<span class="sourceLineNo">489</span><a id="line.489">                {</a>
+<span class="sourceLineNo">490</span><a id="line.490">                newroot = (Node) newroot.array[0];</a>
+<span class="sourceLineNo">491</span><a id="line.491">                newshift -= 5;</a>
+<span class="sourceLineNo">492</span><a id="line.492">                }</a>
+<span class="sourceLineNo">493</span><a id="line.493">        return new PersistentVector(meta(), cnt - 1, newshift, newroot, newtail);</a>
+<span class="sourceLineNo">494</span><a id="line.494">}</a>
+<span class="sourceLineNo">495</span><a id="line.495"></a>
+<span class="sourceLineNo">496</span><a id="line.496">private Node popTail(int level, Node node){</a>
+<span class="sourceLineNo">497</span><a id="line.497">        int subidx = ((cnt-2) &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">498</span><a id="line.498">        if(level &gt; 5)</a>
+<span class="sourceLineNo">499</span><a id="line.499">                {</a>
+<span class="sourceLineNo">500</span><a id="line.500">                Node newchild = popTail(level - 5, (Node) node.array[subidx]);</a>
+<span class="sourceLineNo">501</span><a id="line.501">                if(newchild == null &amp;&amp; subidx == 0)</a>
+<span class="sourceLineNo">502</span><a id="line.502">                        return null;</a>
+<span class="sourceLineNo">503</span><a id="line.503">                else</a>
+<span class="sourceLineNo">504</span><a id="line.504">                        {</a>
+<span class="sourceLineNo">505</span><a id="line.505">                        Node ret = new Node(root.edit, node.array.clone());</a>
+<span class="sourceLineNo">506</span><a id="line.506">                        ret.array[subidx] = newchild;</a>
+<span class="sourceLineNo">507</span><a id="line.507">                        return ret;</a>
+<span class="sourceLineNo">508</span><a id="line.508">                        }</a>
+<span class="sourceLineNo">509</span><a id="line.509">                }</a>
+<span class="sourceLineNo">510</span><a id="line.510">        else if(subidx == 0)</a>
+<span class="sourceLineNo">511</span><a id="line.511">                return null;</a>
+<span class="sourceLineNo">512</span><a id="line.512">        else</a>
+<span class="sourceLineNo">513</span><a id="line.513">                {</a>
+<span class="sourceLineNo">514</span><a id="line.514">                Node ret = new Node(root.edit, node.array.clone());</a>
+<span class="sourceLineNo">515</span><a id="line.515">                ret.array[subidx] = null;</a>
+<span class="sourceLineNo">516</span><a id="line.516">                return ret;</a>
+<span class="sourceLineNo">517</span><a id="line.517">                }</a>
+<span class="sourceLineNo">518</span><a id="line.518">}</a>
+<span class="sourceLineNo">519</span><a id="line.519"></a>
+<span class="sourceLineNo">520</span><a id="line.520">static final class TransientVector extends AFn implements ITransientVector, ITransientAssociative2, Counted{</a>
+<span class="sourceLineNo">521</span><a id="line.521">        volatile int cnt;</a>
+<span class="sourceLineNo">522</span><a id="line.522">        volatile int shift;</a>
+<span class="sourceLineNo">523</span><a id="line.523">        volatile Node root;</a>
+<span class="sourceLineNo">524</span><a id="line.524">        volatile Object[] tail;</a>
+<span class="sourceLineNo">525</span><a id="line.525"></a>
+<span class="sourceLineNo">526</span><a id="line.526">        TransientVector(int cnt, int shift, Node root, Object[] tail){</a>
+<span class="sourceLineNo">527</span><a id="line.527">                this.cnt = cnt;</a>
+<span class="sourceLineNo">528</span><a id="line.528">                this.shift = shift;</a>
+<span class="sourceLineNo">529</span><a id="line.529">                this.root = root;</a>
+<span class="sourceLineNo">530</span><a id="line.530">                this.tail = tail;</a>
+<span class="sourceLineNo">531</span><a id="line.531">        }</a>
+<span class="sourceLineNo">532</span><a id="line.532"></a>
+<span class="sourceLineNo">533</span><a id="line.533">        TransientVector(PersistentVector v){</a>
+<span class="sourceLineNo">534</span><a id="line.534">                this(v.cnt, v.shift, editableRoot(v.root), editableTail(v.tail));</a>
+<span class="sourceLineNo">535</span><a id="line.535">        }</a>
+<span class="sourceLineNo">536</span><a id="line.536"></a>
+<span class="sourceLineNo">537</span><a id="line.537">        public int count(){</a>
+<span class="sourceLineNo">538</span><a id="line.538">                ensureEditable();</a>
+<span class="sourceLineNo">539</span><a id="line.539">                return cnt;</a>
+<span class="sourceLineNo">540</span><a id="line.540">        }</a>
+<span class="sourceLineNo">541</span><a id="line.541">        </a>
+<span class="sourceLineNo">542</span><a id="line.542">        Node ensureEditable(Node node){</a>
+<span class="sourceLineNo">543</span><a id="line.543">                if(node.edit == root.edit)</a>
+<span class="sourceLineNo">544</span><a id="line.544">                        return node;</a>
+<span class="sourceLineNo">545</span><a id="line.545">                return new Node(root.edit, node.array.clone());</a>
+<span class="sourceLineNo">546</span><a id="line.546">        }</a>
+<span class="sourceLineNo">547</span><a id="line.547"></a>
+<span class="sourceLineNo">548</span><a id="line.548">        void ensureEditable(){</a>
+<span class="sourceLineNo">549</span><a id="line.549">                if(root.edit.get() == null)</a>
+<span class="sourceLineNo">550</span><a id="line.550">                        throw new IllegalAccessError("Transient used after persistent! call");</a>
+<span class="sourceLineNo">551</span><a id="line.551"></a>
+<span class="sourceLineNo">552</span><a id="line.552">//              root = editableRoot(root);</a>
+<span class="sourceLineNo">553</span><a id="line.553">//              tail = editableTail(tail);</a>
+<span class="sourceLineNo">554</span><a id="line.554">        }</a>
+<span class="sourceLineNo">555</span><a id="line.555"></a>
+<span class="sourceLineNo">556</span><a id="line.556">        static Node editableRoot(Node node){</a>
+<span class="sourceLineNo">557</span><a id="line.557">                return new Node(new AtomicReference&lt;Thread&gt;(Thread.currentThread()), node.array.clone());</a>
+<span class="sourceLineNo">558</span><a id="line.558">        }</a>
+<span class="sourceLineNo">559</span><a id="line.559"></a>
+<span class="sourceLineNo">560</span><a id="line.560">        public PersistentVector persistent(){</a>
+<span class="sourceLineNo">561</span><a id="line.561">                ensureEditable();</a>
+<span class="sourceLineNo">562</span><a id="line.562">//              Thread owner = root.edit.get();</a>
+<span class="sourceLineNo">563</span><a id="line.563">//              if(owner != null &amp;&amp; owner != Thread.currentThread())</a>
+<span class="sourceLineNo">564</span><a id="line.564">//                      {</a>
+<span class="sourceLineNo">565</span><a id="line.565">//                      throw new IllegalAccessError("Mutation release by non-owner thread");</a>
+<span class="sourceLineNo">566</span><a id="line.566">//                      }</a>
+<span class="sourceLineNo">567</span><a id="line.567">                root.edit.set(null);</a>
+<span class="sourceLineNo">568</span><a id="line.568">                Object[] trimmedTail = new Object[cnt-tailoff()];</a>
+<span class="sourceLineNo">569</span><a id="line.569">                System.arraycopy(tail,0,trimmedTail,0,trimmedTail.length);</a>
+<span class="sourceLineNo">570</span><a id="line.570">                return new PersistentVector(cnt, shift, root, trimmedTail);</a>
+<span class="sourceLineNo">571</span><a id="line.571">        }</a>
+<span class="sourceLineNo">572</span><a id="line.572"></a>
+<span class="sourceLineNo">573</span><a id="line.573">        static Object[] editableTail(Object[] tl){</a>
+<span class="sourceLineNo">574</span><a id="line.574">                Object[] ret = new Object[32];</a>
+<span class="sourceLineNo">575</span><a id="line.575">                System.arraycopy(tl,0,ret,0,tl.length);</a>
+<span class="sourceLineNo">576</span><a id="line.576">                return ret;</a>
+<span class="sourceLineNo">577</span><a id="line.577">        }</a>
+<span class="sourceLineNo">578</span><a id="line.578"></a>
+<span class="sourceLineNo">579</span><a id="line.579">        public TransientVector conj(Object val){</a>
+<span class="sourceLineNo">580</span><a id="line.580">                ensureEditable();</a>
+<span class="sourceLineNo">581</span><a id="line.581">                int i = cnt;</a>
+<span class="sourceLineNo">582</span><a id="line.582">                //room in tail?</a>
+<span class="sourceLineNo">583</span><a id="line.583">                if(i - tailoff() &lt; 32)</a>
+<span class="sourceLineNo">584</span><a id="line.584">                        {</a>
+<span class="sourceLineNo">585</span><a id="line.585">                        tail[i &amp; 0x01f] = val;</a>
+<span class="sourceLineNo">586</span><a id="line.586">                        ++cnt;</a>
+<span class="sourceLineNo">587</span><a id="line.587">                        return this;</a>
+<span class="sourceLineNo">588</span><a id="line.588">                        }</a>
+<span class="sourceLineNo">589</span><a id="line.589">                //full tail, push into tree</a>
+<span class="sourceLineNo">590</span><a id="line.590">                Node newroot;</a>
+<span class="sourceLineNo">591</span><a id="line.591">                Node tailnode = new Node(root.edit, tail);</a>
+<span class="sourceLineNo">592</span><a id="line.592">                tail = new Object[32];</a>
+<span class="sourceLineNo">593</span><a id="line.593">                tail[0] = val;</a>
+<span class="sourceLineNo">594</span><a id="line.594">                int newshift = shift;</a>
+<span class="sourceLineNo">595</span><a id="line.595">                //overflow root?</a>
+<span class="sourceLineNo">596</span><a id="line.596">                if((cnt &gt;&gt;&gt; 5) &gt; (1 &lt;&lt; shift))</a>
+<span class="sourceLineNo">597</span><a id="line.597">                        {</a>
+<span class="sourceLineNo">598</span><a id="line.598">                        newroot = new Node(root.edit);</a>
+<span class="sourceLineNo">599</span><a id="line.599">                        newroot.array[0] = root;</a>
+<span class="sourceLineNo">600</span><a id="line.600">                        newroot.array[1] = newPath(root.edit,shift, tailnode);</a>
+<span class="sourceLineNo">601</span><a id="line.601">                        newshift += 5;</a>
+<span class="sourceLineNo">602</span><a id="line.602">                        }</a>
+<span class="sourceLineNo">603</span><a id="line.603">                else</a>
+<span class="sourceLineNo">604</span><a id="line.604">                        newroot = pushTail(shift, root, tailnode);</a>
+<span class="sourceLineNo">605</span><a id="line.605">                root = newroot;</a>
+<span class="sourceLineNo">606</span><a id="line.606">                shift = newshift;</a>
+<span class="sourceLineNo">607</span><a id="line.607">                ++cnt;</a>
+<span class="sourceLineNo">608</span><a id="line.608">                return this;</a>
+<span class="sourceLineNo">609</span><a id="line.609">        }</a>
+<span class="sourceLineNo">610</span><a id="line.610"></a>
+<span class="sourceLineNo">611</span><a id="line.611">        private Node pushTail(int level, Node parent, Node tailnode){</a>
+<span class="sourceLineNo">612</span><a id="line.612">                //if parent is leaf, insert node,</a>
+<span class="sourceLineNo">613</span><a id="line.613">                // else does it map to an existing child? -&gt; nodeToInsert = pushNode one more level</a>
+<span class="sourceLineNo">614</span><a id="line.614">                // else alloc new path</a>
+<span class="sourceLineNo">615</span><a id="line.615">                //return  nodeToInsert placed in parent</a>
+<span class="sourceLineNo">616</span><a id="line.616">                parent = ensureEditable(parent);</a>
+<span class="sourceLineNo">617</span><a id="line.617">                int subidx = ((cnt - 1) &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">618</span><a id="line.618">                Node ret = parent;</a>
+<span class="sourceLineNo">619</span><a id="line.619">                Node nodeToInsert;</a>
+<span class="sourceLineNo">620</span><a id="line.620">                if(level == 5)</a>
+<span class="sourceLineNo">621</span><a id="line.621">                        {</a>
+<span class="sourceLineNo">622</span><a id="line.622">                        nodeToInsert = tailnode;</a>
+<span class="sourceLineNo">623</span><a id="line.623">                        }</a>
+<span class="sourceLineNo">624</span><a id="line.624">                else</a>
+<span class="sourceLineNo">625</span><a id="line.625">                        {</a>
+<span class="sourceLineNo">626</span><a id="line.626">                        Node child = (Node) parent.array[subidx];</a>
+<span class="sourceLineNo">627</span><a id="line.627">                        nodeToInsert = (child != null) ?</a>
+<span class="sourceLineNo">628</span><a id="line.628">                                       pushTail(level - 5, child, tailnode)</a>
+<span class="sourceLineNo">629</span><a id="line.629">                                                       : newPath(root.edit, level - 5, tailnode);</a>
+<span class="sourceLineNo">630</span><a id="line.630">                        }</a>
+<span class="sourceLineNo">631</span><a id="line.631">                ret.array[subidx] = nodeToInsert;</a>
+<span class="sourceLineNo">632</span><a id="line.632">                return ret;</a>
+<span class="sourceLineNo">633</span><a id="line.633">        }</a>
+<span class="sourceLineNo">634</span><a id="line.634"></a>
+<span class="sourceLineNo">635</span><a id="line.635">        final private int tailoff(){</a>
+<span class="sourceLineNo">636</span><a id="line.636">                if(cnt &lt; 32)</a>
+<span class="sourceLineNo">637</span><a id="line.637">                        return 0;</a>
+<span class="sourceLineNo">638</span><a id="line.638">                return ((cnt-1) &gt;&gt;&gt; 5) &lt;&lt; 5;</a>
+<span class="sourceLineNo">639</span><a id="line.639">        }</a>
+<span class="sourceLineNo">640</span><a id="line.640"></a>
+<span class="sourceLineNo">641</span><a id="line.641">        private Object[] arrayFor(int i){</a>
+<span class="sourceLineNo">642</span><a id="line.642">                if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">643</span><a id="line.643">                        {</a>
+<span class="sourceLineNo">644</span><a id="line.644">                        if(i &gt;= tailoff())</a>
+<span class="sourceLineNo">645</span><a id="line.645">                                return tail;</a>
+<span class="sourceLineNo">646</span><a id="line.646">                        Node node = root;</a>
+<span class="sourceLineNo">647</span><a id="line.647">                        for(int level = shift; level &gt; 0; level -= 5)</a>
+<span class="sourceLineNo">648</span><a id="line.648">                                node = (Node) node.array[(i &gt;&gt;&gt; level) &amp; 0x01f];</a>
+<span class="sourceLineNo">649</span><a id="line.649">                        return node.array;</a>
+<span class="sourceLineNo">650</span><a id="line.650">                        }</a>
+<span class="sourceLineNo">651</span><a id="line.651">                throw new IndexOutOfBoundsException();</a>
+<span class="sourceLineNo">652</span><a id="line.652">        }</a>
+<span class="sourceLineNo">653</span><a id="line.653"></a>
+<span class="sourceLineNo">654</span><a id="line.654">        private Object[] editableArrayFor(int i){</a>
+<span class="sourceLineNo">655</span><a id="line.655">                if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">656</span><a id="line.656">                        {</a>
+<span class="sourceLineNo">657</span><a id="line.657">                        if(i &gt;= tailoff())</a>
+<span class="sourceLineNo">658</span><a id="line.658">                                return tail;</a>
+<span class="sourceLineNo">659</span><a id="line.659">                        Node node = root;</a>
+<span class="sourceLineNo">660</span><a id="line.660">                        for(int level = shift; level &gt; 0; level -= 5)</a>
+<span class="sourceLineNo">661</span><a id="line.661">                                node = ensureEditable((Node) node.array[(i &gt;&gt;&gt; level) &amp; 0x01f]);</a>
+<span class="sourceLineNo">662</span><a id="line.662">                        return node.array;</a>
+<span class="sourceLineNo">663</span><a id="line.663">                        }</a>
+<span class="sourceLineNo">664</span><a id="line.664">                throw new IndexOutOfBoundsException();</a>
+<span class="sourceLineNo">665</span><a id="line.665">        }</a>
+<span class="sourceLineNo">666</span><a id="line.666"></a>
+<span class="sourceLineNo">667</span><a id="line.667">        public Object valAt(Object key){</a>
+<span class="sourceLineNo">668</span><a id="line.668">                //note - relies on ensureEditable in 2-arg valAt</a>
+<span class="sourceLineNo">669</span><a id="line.669">                return valAt(key, null);</a>
+<span class="sourceLineNo">670</span><a id="line.670">        }</a>
+<span class="sourceLineNo">671</span><a id="line.671"></a>
+<span class="sourceLineNo">672</span><a id="line.672">        public Object valAt(Object key, Object notFound){</a>
+<span class="sourceLineNo">673</span><a id="line.673">                ensureEditable();</a>
+<span class="sourceLineNo">674</span><a id="line.674">                if(Util.isInteger(key))</a>
+<span class="sourceLineNo">675</span><a id="line.675">                        {</a>
+<span class="sourceLineNo">676</span><a id="line.676">                        int i = ((Number) key).intValue();</a>
+<span class="sourceLineNo">677</span><a id="line.677">                        if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">678</span><a id="line.678">                                return nth(i);</a>
+<span class="sourceLineNo">679</span><a id="line.679">                        }</a>
+<span class="sourceLineNo">680</span><a id="line.680">                return notFound;</a>
+<span class="sourceLineNo">681</span><a id="line.681">        }</a>
+<span class="sourceLineNo">682</span><a id="line.682"></a>
+<span class="sourceLineNo">683</span><a id="line.683">        private static final Object NOT_FOUND = new Object();</a>
+<span class="sourceLineNo">684</span><a id="line.684">        public final boolean containsKey(Object key){</a>
+<span class="sourceLineNo">685</span><a id="line.685">                return valAt(key, NOT_FOUND) != NOT_FOUND;</a>
+<span class="sourceLineNo">686</span><a id="line.686">        }</a>
+<span class="sourceLineNo">687</span><a id="line.687"></a>
+<span class="sourceLineNo">688</span><a id="line.688">        public final IMapEntry entryAt(Object key){</a>
+<span class="sourceLineNo">689</span><a id="line.689">                Object v = valAt(key, NOT_FOUND);</a>
+<span class="sourceLineNo">690</span><a id="line.690">                if(v != NOT_FOUND)</a>
+<span class="sourceLineNo">691</span><a id="line.691">                        return MapEntry.create(key, v);</a>
+<span class="sourceLineNo">692</span><a id="line.692">                return null;</a>
+<span class="sourceLineNo">693</span><a id="line.693">        }</a>
+<span class="sourceLineNo">694</span><a id="line.694"></a>
+<span class="sourceLineNo">695</span><a id="line.695">        public Object invoke(Object arg1) {</a>
+<span class="sourceLineNo">696</span><a id="line.696">                //note - relies on ensureEditable in nth</a>
+<span class="sourceLineNo">697</span><a id="line.697">                if(Util.isInteger(arg1))</a>
+<span class="sourceLineNo">698</span><a id="line.698">                        return nth(((Number) arg1).intValue());</a>
+<span class="sourceLineNo">699</span><a id="line.699">                throw new IllegalArgumentException("Key must be integer");</a>
+<span class="sourceLineNo">700</span><a id="line.700">        }</a>
+<span class="sourceLineNo">701</span><a id="line.701"></a>
+<span class="sourceLineNo">702</span><a id="line.702">        public Object nth(int i){</a>
+<span class="sourceLineNo">703</span><a id="line.703">                ensureEditable();</a>
+<span class="sourceLineNo">704</span><a id="line.704">                Object[] node = arrayFor(i);</a>
+<span class="sourceLineNo">705</span><a id="line.705">                return node[i &amp; 0x01f];</a>
+<span class="sourceLineNo">706</span><a id="line.706">        }</a>
+<span class="sourceLineNo">707</span><a id="line.707"></a>
+<span class="sourceLineNo">708</span><a id="line.708">        public Object nth(int i, Object notFound){</a>
+<span class="sourceLineNo">709</span><a id="line.709">                if(i &gt;= 0 &amp;&amp; i &lt; count())</a>
+<span class="sourceLineNo">710</span><a id="line.710">                        return nth(i);</a>
+<span class="sourceLineNo">711</span><a id="line.711">                return notFound;</a>
+<span class="sourceLineNo">712</span><a id="line.712">        }</a>
+<span class="sourceLineNo">713</span><a id="line.713"></a>
+<span class="sourceLineNo">714</span><a id="line.714">        public TransientVector assocN(int i, Object val){</a>
+<span class="sourceLineNo">715</span><a id="line.715">                ensureEditable();</a>
+<span class="sourceLineNo">716</span><a id="line.716">                if(i &gt;= 0 &amp;&amp; i &lt; cnt)</a>
+<span class="sourceLineNo">717</span><a id="line.717">                        {</a>
+<span class="sourceLineNo">718</span><a id="line.718">                        if(i &gt;= tailoff())</a>
+<span class="sourceLineNo">719</span><a id="line.719">                                {</a>
+<span class="sourceLineNo">720</span><a id="line.720">                                tail[i &amp; 0x01f] = val;</a>
+<span class="sourceLineNo">721</span><a id="line.721">                                return this;</a>
+<span class="sourceLineNo">722</span><a id="line.722">                                }</a>
+<span class="sourceLineNo">723</span><a id="line.723"></a>
+<span class="sourceLineNo">724</span><a id="line.724">                        root = doAssoc(shift, root, i, val);</a>
+<span class="sourceLineNo">725</span><a id="line.725">                        return this;</a>
+<span class="sourceLineNo">726</span><a id="line.726">                        }</a>
+<span class="sourceLineNo">727</span><a id="line.727">                if(i == cnt)</a>
+<span class="sourceLineNo">728</span><a id="line.728">                        return conj(val);</a>
+<span class="sourceLineNo">729</span><a id="line.729">                throw new IndexOutOfBoundsException();</a>
+<span class="sourceLineNo">730</span><a id="line.730">        }</a>
+<span class="sourceLineNo">731</span><a id="line.731"></a>
+<span class="sourceLineNo">732</span><a id="line.732">        public TransientVector assoc(Object key, Object val){</a>
+<span class="sourceLineNo">733</span><a id="line.733">                //note - relies on ensureEditable in assocN</a>
+<span class="sourceLineNo">734</span><a id="line.734">                if(Util.isInteger(key))</a>
+<span class="sourceLineNo">735</span><a id="line.735">                        {</a>
+<span class="sourceLineNo">736</span><a id="line.736">                        int i = ((Number) key).intValue();</a>
+<span class="sourceLineNo">737</span><a id="line.737">                        return assocN(i, val);</a>
+<span class="sourceLineNo">738</span><a id="line.738">                        }</a>
+<span class="sourceLineNo">739</span><a id="line.739">                throw new IllegalArgumentException("Key must be integer");</a>
+<span class="sourceLineNo">740</span><a id="line.740">        }</a>
+<span class="sourceLineNo">741</span><a id="line.741"></a>
+<span class="sourceLineNo">742</span><a id="line.742">        private Node doAssoc(int level, Node node, int i, Object val){</a>
+<span class="sourceLineNo">743</span><a id="line.743">                node = ensureEditable(node);</a>
+<span class="sourceLineNo">744</span><a id="line.744">                Node ret = node;</a>
+<span class="sourceLineNo">745</span><a id="line.745">                if(level == 0)</a>
+<span class="sourceLineNo">746</span><a id="line.746">                        {</a>
+<span class="sourceLineNo">747</span><a id="line.747">                        ret.array[i &amp; 0x01f] = val;</a>
+<span class="sourceLineNo">748</span><a id="line.748">                        }</a>
+<span class="sourceLineNo">749</span><a id="line.749">                else</a>
+<span class="sourceLineNo">750</span><a id="line.750">                        {</a>
+<span class="sourceLineNo">751</span><a id="line.751">                        int subidx = (i &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">752</span><a id="line.752">                        ret.array[subidx] = doAssoc(level - 5, (Node) node.array[subidx], i, val);</a>
+<span class="sourceLineNo">753</span><a id="line.753">                        }</a>
+<span class="sourceLineNo">754</span><a id="line.754">                return ret;</a>
+<span class="sourceLineNo">755</span><a id="line.755">        }</a>
+<span class="sourceLineNo">756</span><a id="line.756"></a>
+<span class="sourceLineNo">757</span><a id="line.757">        public TransientVector pop(){</a>
+<span class="sourceLineNo">758</span><a id="line.758">                ensureEditable();</a>
+<span class="sourceLineNo">759</span><a id="line.759">                if(cnt == 0)</a>
+<span class="sourceLineNo">760</span><a id="line.760">                        throw new IllegalStateException("Can't pop empty vector");</a>
+<span class="sourceLineNo">761</span><a id="line.761">                if(cnt == 1)</a>
+<span class="sourceLineNo">762</span><a id="line.762">                        {</a>
+<span class="sourceLineNo">763</span><a id="line.763">                        cnt = 0;</a>
+<span class="sourceLineNo">764</span><a id="line.764">                        return this;</a>
+<span class="sourceLineNo">765</span><a id="line.765">                        }</a>
+<span class="sourceLineNo">766</span><a id="line.766">                int i = cnt - 1;</a>
+<span class="sourceLineNo">767</span><a id="line.767">                //pop in tail?</a>
+<span class="sourceLineNo">768</span><a id="line.768">                if((i &amp; 0x01f) &gt; 0)</a>
+<span class="sourceLineNo">769</span><a id="line.769">                        {</a>
+<span class="sourceLineNo">770</span><a id="line.770">                        --cnt;</a>
+<span class="sourceLineNo">771</span><a id="line.771">                        return this;</a>
+<span class="sourceLineNo">772</span><a id="line.772">                        }</a>
+<span class="sourceLineNo">773</span><a id="line.773"></a>
+<span class="sourceLineNo">774</span><a id="line.774">                Object[] newtail = editableArrayFor(cnt - 2);</a>
+<span class="sourceLineNo">775</span><a id="line.775"></a>
+<span class="sourceLineNo">776</span><a id="line.776">                Node newroot = popTail(shift, root);</a>
+<span class="sourceLineNo">777</span><a id="line.777">                int newshift = shift;</a>
+<span class="sourceLineNo">778</span><a id="line.778">                if(newroot == null)</a>
+<span class="sourceLineNo">779</span><a id="line.779">                        {</a>
+<span class="sourceLineNo">780</span><a id="line.780">                        newroot = new Node(root.edit);</a>
+<span class="sourceLineNo">781</span><a id="line.781">                        }</a>
+<span class="sourceLineNo">782</span><a id="line.782">                if(shift &gt; 5 &amp;&amp; newroot.array[1] == null)</a>
+<span class="sourceLineNo">783</span><a id="line.783">                        {</a>
+<span class="sourceLineNo">784</span><a id="line.784">                        newroot = ensureEditable((Node) newroot.array[0]);</a>
+<span class="sourceLineNo">785</span><a id="line.785">                        newshift -= 5;</a>
+<span class="sourceLineNo">786</span><a id="line.786">                        }</a>
+<span class="sourceLineNo">787</span><a id="line.787">                root = newroot;</a>
+<span class="sourceLineNo">788</span><a id="line.788">                shift = newshift;</a>
+<span class="sourceLineNo">789</span><a id="line.789">                --cnt;</a>
+<span class="sourceLineNo">790</span><a id="line.790">                tail = newtail;</a>
+<span class="sourceLineNo">791</span><a id="line.791">                return this;</a>
+<span class="sourceLineNo">792</span><a id="line.792">        }</a>
+<span class="sourceLineNo">793</span><a id="line.793"></a>
+<span class="sourceLineNo">794</span><a id="line.794">        private Node popTail(int level, Node node){</a>
+<span class="sourceLineNo">795</span><a id="line.795">                node = ensureEditable(node);</a>
+<span class="sourceLineNo">796</span><a id="line.796">                int subidx = ((cnt - 2) &gt;&gt;&gt; level) &amp; 0x01f;</a>
+<span class="sourceLineNo">797</span><a id="line.797">                if(level &gt; 5)</a>
+<span class="sourceLineNo">798</span><a id="line.798">                        {</a>
+<span class="sourceLineNo">799</span><a id="line.799">                        Node newchild = popTail(level - 5, (Node) node.array[subidx]);</a>
+<span class="sourceLineNo">800</span><a id="line.800">                        if(newchild == null &amp;&amp; subidx == 0)</a>
+<span class="sourceLineNo">801</span><a id="line.801">                                return null;</a>
+<span class="sourceLineNo">802</span><a id="line.802">                        else</a>
+<span class="sourceLineNo">803</span><a id="line.803">                                {</a>
+<span class="sourceLineNo">804</span><a id="line.804">                                Node ret = node;</a>
+<span class="sourceLineNo">805</span><a id="line.805">                                ret.array[subidx] = newchild;</a>
+<span class="sourceLineNo">806</span><a id="line.806">                                return ret;</a>
+<span class="sourceLineNo">807</span><a id="line.807">                                }</a>
+<span class="sourceLineNo">808</span><a id="line.808">                        }</a>
+<span class="sourceLineNo">809</span><a id="line.809">                else if(subidx == 0)</a>
+<span class="sourceLineNo">810</span><a id="line.810">                        return null;</a>
+<span class="sourceLineNo">811</span><a id="line.811">                else</a>
+<span class="sourceLineNo">812</span><a id="line.812">                        {</a>
+<span class="sourceLineNo">813</span><a id="line.813">                        Node ret = node;</a>
+<span class="sourceLineNo">814</span><a id="line.814">                        ret.array[subidx] = null;</a>
+<span class="sourceLineNo">815</span><a id="line.815">                        return ret;</a>
+<span class="sourceLineNo">816</span><a id="line.816">                        }</a>
+<span class="sourceLineNo">817</span><a id="line.817">        }</a>
+<span class="sourceLineNo">818</span><a id="line.818">}</a>
+<span class="sourceLineNo">819</span><a id="line.819">/*</a>
+<span class="sourceLineNo">820</span><a id="line.820">static public void main(String[] args){</a>
+<span class="sourceLineNo">821</span><a id="line.821">        if(args.length != 3)</a>
+<span class="sourceLineNo">822</span><a id="line.822">                {</a>
+<span class="sourceLineNo">823</span><a id="line.823">                System.err.println("Usage: PersistentVector size writes reads");</a>
+<span class="sourceLineNo">824</span><a id="line.824">                return;</a>
+<span class="sourceLineNo">825</span><a id="line.825">                }</a>
+<span class="sourceLineNo">826</span><a id="line.826">        int size = Integer.parseInt(args[0]);</a>
+<span class="sourceLineNo">827</span><a id="line.827">        int writes = Integer.parseInt(args[1]);</a>
+<span class="sourceLineNo">828</span><a id="line.828">        int reads = Integer.parseInt(args[2]);</a>
+<span class="sourceLineNo">829</span><a id="line.829">//      Vector v = new Vector(size);</a>
+<span class="sourceLineNo">830</span><a id="line.830">        ArrayList v = new ArrayList(size);</a>
+<span class="sourceLineNo">831</span><a id="line.831">//      v.setSize(size);</a>
+<span class="sourceLineNo">832</span><a id="line.832">        //PersistentArray p = new PersistentArray(size);</a>
+<span class="sourceLineNo">833</span><a id="line.833">        PersistentVector p = PersistentVector.EMPTY;</a>
+<span class="sourceLineNo">834</span><a id="line.834">//      MutableVector mp = p.mutable();</a>
+<span class="sourceLineNo">835</span><a id="line.835"></a>
+<span class="sourceLineNo">836</span><a id="line.836">        for(int i = 0; i &lt; size; i++)</a>
+<span class="sourceLineNo">837</span><a id="line.837">                {</a>
+<span class="sourceLineNo">838</span><a id="line.838">                v.add(i);</a>
+<span class="sourceLineNo">839</span><a id="line.839">//              v.set(i, i);</a>
+<span class="sourceLineNo">840</span><a id="line.840">                //p = p.set(i, 0);</a>
+<span class="sourceLineNo">841</span><a id="line.841">                p = p.cons(i);</a>
+<span class="sourceLineNo">842</span><a id="line.842">//              mp = mp.conj(i);</a>
+<span class="sourceLineNo">843</span><a id="line.843">                }</a>
+<span class="sourceLineNo">844</span><a id="line.844"></a>
+<span class="sourceLineNo">845</span><a id="line.845">        Random rand;</a>
+<span class="sourceLineNo">846</span><a id="line.846"></a>
+<span class="sourceLineNo">847</span><a id="line.847">        rand = new Random(42);</a>
+<span class="sourceLineNo">848</span><a id="line.848">        long tv = 0;</a>
+<span class="sourceLineNo">849</span><a id="line.849">        System.out.println("ArrayList");</a>
+<span class="sourceLineNo">850</span><a id="line.850">        long startTime = System.nanoTime();</a>
+<span class="sourceLineNo">851</span><a id="line.851">        for(int i = 0; i &lt; writes; i++)</a>
+<span class="sourceLineNo">852</span><a id="line.852">                {</a>
+<span class="sourceLineNo">853</span><a id="line.853">                v.set(rand.nextInt(size), i);</a>
+<span class="sourceLineNo">854</span><a id="line.854">                }</a>
+<span class="sourceLineNo">855</span><a id="line.855">        for(int i = 0; i &lt; reads; i++)</a>
+<span class="sourceLineNo">856</span><a id="line.856">                {</a>
+<span class="sourceLineNo">857</span><a id="line.857">                tv += (Integer) v.get(rand.nextInt(size));</a>
+<span class="sourceLineNo">858</span><a id="line.858">                }</a>
+<span class="sourceLineNo">859</span><a id="line.859">        long estimatedTime = System.nanoTime() - startTime;</a>
+<span class="sourceLineNo">860</span><a id="line.860">        System.out.println("time: " + estimatedTime / 1000000);</a>
+<span class="sourceLineNo">861</span><a id="line.861">        System.out.println("PersistentVector");</a>
+<span class="sourceLineNo">862</span><a id="line.862">        rand = new Random(42);</a>
+<span class="sourceLineNo">863</span><a id="line.863">        startTime = System.nanoTime();</a>
+<span class="sourceLineNo">864</span><a id="line.864">        long tp = 0;</a>
+<span class="sourceLineNo">865</span><a id="line.865"></a>
+<span class="sourceLineNo">866</span><a id="line.866">//      PersistentVector oldp = p;</a>
+<span class="sourceLineNo">867</span><a id="line.867">        //Random rand2 = new Random(42);</a>
+<span class="sourceLineNo">868</span><a id="line.868"></a>
+<span class="sourceLineNo">869</span><a id="line.869">        MutableVector mp = p.mutable();</a>
+<span class="sourceLineNo">870</span><a id="line.870">        for(int i = 0; i &lt; writes; i++)</a>
+<span class="sourceLineNo">871</span><a id="line.871">                {</a>
+<span class="sourceLineNo">872</span><a id="line.872">//              p = p.assocN(rand.nextInt(size), i);</a>
+<span class="sourceLineNo">873</span><a id="line.873">                mp = mp.assocN(rand.nextInt(size), i);</a>
+<span class="sourceLineNo">874</span><a id="line.874">//              mp = mp.assoc(rand.nextInt(size), i);</a>
+<span class="sourceLineNo">875</span><a id="line.875">                //dummy set to force perverse branching</a>
+<span class="sourceLineNo">876</span><a id="line.876">                //oldp =        oldp.assocN(rand2.nextInt(size), i);</a>
+<span class="sourceLineNo">877</span><a id="line.877">                }</a>
+<span class="sourceLineNo">878</span><a id="line.878">        for(int i = 0; i &lt; reads; i++)</a>
+<span class="sourceLineNo">879</span><a id="line.879">                {</a>
+<span class="sourceLineNo">880</span><a id="line.880">//              tp += (Integer) p.nth(rand.nextInt(size));</a>
+<span class="sourceLineNo">881</span><a id="line.881">                tp += (Integer) mp.nth(rand.nextInt(size));</a>
+<span class="sourceLineNo">882</span><a id="line.882">                }</a>
+<span class="sourceLineNo">883</span><a id="line.883">//      p = mp.immutable();</a>
+<span class="sourceLineNo">884</span><a id="line.884">        //mp.cons(42);</a>
+<span class="sourceLineNo">885</span><a id="line.885">        estimatedTime = System.nanoTime() - startTime;</a>
+<span class="sourceLineNo">886</span><a id="line.886">        System.out.println("time: " + estimatedTime / 1000000);</a>
+<span class="sourceLineNo">887</span><a id="line.887">        for(int i = 0; i &lt; size / 2; i++)</a>
+<span class="sourceLineNo">888</span><a id="line.888">                {</a>
+<span class="sourceLineNo">889</span><a id="line.889">                mp = mp.pop();</a>
+<span class="sourceLineNo">890</span><a id="line.890">//              p = p.pop();</a>
+<span class="sourceLineNo">891</span><a id="line.891">                v.remove(v.size() - 1);</a>
+<span class="sourceLineNo">892</span><a id="line.892">                }</a>
+<span class="sourceLineNo">893</span><a id="line.893">        p = (PersistentVector) mp.immutable();</a>
+<span class="sourceLineNo">894</span><a id="line.894">        //mp.pop();  //should fail</a>
+<span class="sourceLineNo">895</span><a id="line.895">        for(int i = 0; i &lt; size / 2; i++)</a>
+<span class="sourceLineNo">896</span><a id="line.896">                {</a>
+<span class="sourceLineNo">897</span><a id="line.897">                tp += (Integer) p.nth(i);</a>
+<span class="sourceLineNo">898</span><a id="line.898">                tv += (Integer) v.get(i);</a>
+<span class="sourceLineNo">899</span><a id="line.899">                }</a>
+<span class="sourceLineNo">900</span><a id="line.900">        System.out.println("Done: " + tv + ", " + tp);</a>
+<span class="sourceLineNo">901</span><a id="line.901"></a>
+<span class="sourceLineNo">902</span><a id="line.902">}</a>
+<span class="sourceLineNo">903</span><a id="line.903">//  */</a>
+<span class="sourceLineNo">904</span><a id="line.904">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

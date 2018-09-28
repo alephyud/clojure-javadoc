@@ -1,0 +1,1045 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">// ASM: a very small and fast Java bytecode manipulation framework</a>
+<span class="sourceLineNo">002</span><a id="line.2">// Copyright (c) 2000-2011 INRIA, France Telecom</a>
+<span class="sourceLineNo">003</span><a id="line.3">// All rights reserved.</a>
+<span class="sourceLineNo">004</span><a id="line.4">//</a>
+<span class="sourceLineNo">005</span><a id="line.5">// Redistribution and use in source and binary forms, with or without</a>
+<span class="sourceLineNo">006</span><a id="line.6">// modification, are permitted provided that the following conditions</a>
+<span class="sourceLineNo">007</span><a id="line.7">// are met:</a>
+<span class="sourceLineNo">008</span><a id="line.8">// 1. Redistributions of source code must retain the above copyright</a>
+<span class="sourceLineNo">009</span><a id="line.9">//    notice, this list of conditions and the following disclaimer.</a>
+<span class="sourceLineNo">010</span><a id="line.10">// 2. Redistributions in binary form must reproduce the above copyright</a>
+<span class="sourceLineNo">011</span><a id="line.11">//    notice, this list of conditions and the following disclaimer in the</a>
+<span class="sourceLineNo">012</span><a id="line.12">//    documentation and/or other materials provided with the distribution.</a>
+<span class="sourceLineNo">013</span><a id="line.13">// 3. Neither the name of the copyright holders nor the names of its</a>
+<span class="sourceLineNo">014</span><a id="line.14">//    contributors may be used to endorse or promote products derived from</a>
+<span class="sourceLineNo">015</span><a id="line.15">//    this software without specific prior written permission.</a>
+<span class="sourceLineNo">016</span><a id="line.16">//</a>
+<span class="sourceLineNo">017</span><a id="line.17">// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"</a>
+<span class="sourceLineNo">018</span><a id="line.18">// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</a>
+<span class="sourceLineNo">019</span><a id="line.19">// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</a>
+<span class="sourceLineNo">020</span><a id="line.20">// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</a>
+<span class="sourceLineNo">021</span><a id="line.21">// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</a>
+<span class="sourceLineNo">022</span><a id="line.22">// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</a>
+<span class="sourceLineNo">023</span><a id="line.23">// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</a>
+<span class="sourceLineNo">024</span><a id="line.24">// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</a>
+<span class="sourceLineNo">025</span><a id="line.25">// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</a>
+<span class="sourceLineNo">026</span><a id="line.26">// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF</a>
+<span class="sourceLineNo">027</span><a id="line.27">// THE POSSIBILITY OF SUCH DAMAGE.</a>
+<span class="sourceLineNo">028</span><a id="line.28">package clojure.asm;</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">/**</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * A {@link ClassVisitor} that generates a corresponding ClassFile structure, as defined in the Java</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * Virtual Machine Specification (JVMS). It can be used alone, to generate a Java class "from</a>
+<span class="sourceLineNo">033</span><a id="line.33"> * scratch", or with one or more {@link ClassReader} and adapter {@link ClassVisitor} to generate a</a>
+<span class="sourceLineNo">034</span><a id="line.34"> * modified class from one or more existing Java classes.</a>
+<span class="sourceLineNo">035</span><a id="line.35"> *</a>
+<span class="sourceLineNo">036</span><a id="line.36"> * @see &lt;a href="https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html"&gt;JVMS 4&lt;/a&gt;</a>
+<span class="sourceLineNo">037</span><a id="line.37"> * @author Eric Bruneton</a>
+<span class="sourceLineNo">038</span><a id="line.38"> */</a>
+<span class="sourceLineNo">039</span><a id="line.39">public class ClassWriter extends ClassVisitor {</a>
+<span class="sourceLineNo">040</span><a id="line.40"></a>
+<span class="sourceLineNo">041</span><a id="line.41">  /**</a>
+<span class="sourceLineNo">042</span><a id="line.42">   * A flag to automatically compute the maximum stack size and the maximum number of local</a>
+<span class="sourceLineNo">043</span><a id="line.43">   * variables of methods. If this flag is set, then the arguments of the {@link</a>
+<span class="sourceLineNo">044</span><a id="line.44">   * MethodVisitor#visitMaxs} method of the {@link MethodVisitor} returned by the {@link</a>
+<span class="sourceLineNo">045</span><a id="line.45">   * #visitMethod} method will be ignored, and computed automatically from the signature and the</a>
+<span class="sourceLineNo">046</span><a id="line.46">   * bytecode of each method.</a>
+<span class="sourceLineNo">047</span><a id="line.47">   *</a>
+<span class="sourceLineNo">048</span><a id="line.48">   * &lt;p&gt;&lt;b&gt;Note:&lt;/b&gt; for classes whose version is {@link Opcodes#V1_7} of more, this option requires</a>
+<span class="sourceLineNo">049</span><a id="line.49">   * valid stack map frames. The maximum stack size is then computed from these frames, and from the</a>
+<span class="sourceLineNo">050</span><a id="line.50">   * bytecode instructions in between. If stack map frames are not present or must be recomputed,</a>
+<span class="sourceLineNo">051</span><a id="line.51">   * used {@link #COMPUTE_FRAMES} instead.</a>
+<span class="sourceLineNo">052</span><a id="line.52">   *</a>
+<span class="sourceLineNo">053</span><a id="line.53">   * @see #ClassWriter(int)</a>
+<span class="sourceLineNo">054</span><a id="line.54">   */</a>
+<span class="sourceLineNo">055</span><a id="line.55">  public static final int COMPUTE_MAXS = 1;</a>
+<span class="sourceLineNo">056</span><a id="line.56"></a>
+<span class="sourceLineNo">057</span><a id="line.57">  /**</a>
+<span class="sourceLineNo">058</span><a id="line.58">   * A flag to automatically compute the stack map frames of methods from scratch. If this flag is</a>
+<span class="sourceLineNo">059</span><a id="line.59">   * set, then the calls to the {@link MethodVisitor#visitFrame} method are ignored, and the stack</a>
+<span class="sourceLineNo">060</span><a id="line.60">   * map frames are recomputed from the methods bytecode. The arguments of the {@link</a>
+<span class="sourceLineNo">061</span><a id="line.61">   * MethodVisitor#visitMaxs} method are also ignored and recomputed from the bytecode. In other</a>
+<span class="sourceLineNo">062</span><a id="line.62">   * words, {@link #COMPUTE_FRAMES} implies {@link #COMPUTE_MAXS}.</a>
+<span class="sourceLineNo">063</span><a id="line.63">   *</a>
+<span class="sourceLineNo">064</span><a id="line.64">   * @see #ClassWriter(int)</a>
+<span class="sourceLineNo">065</span><a id="line.65">   */</a>
+<span class="sourceLineNo">066</span><a id="line.66">  public static final int COMPUTE_FRAMES = 2;</a>
+<span class="sourceLineNo">067</span><a id="line.67"></a>
+<span class="sourceLineNo">068</span><a id="line.68">  // Note: fields are ordered as in the ClassFile structure, and those related to attributes are</a>
+<span class="sourceLineNo">069</span><a id="line.69">  // ordered as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">070</span><a id="line.70"></a>
+<span class="sourceLineNo">071</span><a id="line.71">  /**</a>
+<span class="sourceLineNo">072</span><a id="line.72">   * The minor_version and major_version fields of the JVMS ClassFile structure. minor_version is</a>
+<span class="sourceLineNo">073</span><a id="line.73">   * stored in the 16 most significant bits, and major_version in the 16 least significant bits.</a>
+<span class="sourceLineNo">074</span><a id="line.74">   */</a>
+<span class="sourceLineNo">075</span><a id="line.75">  private int version;</a>
+<span class="sourceLineNo">076</span><a id="line.76"></a>
+<span class="sourceLineNo">077</span><a id="line.77">  /** The symbol table for this class (contains the constant_pool and the BootstrapMethods). */</a>
+<span class="sourceLineNo">078</span><a id="line.78">  private final SymbolTable symbolTable;</a>
+<span class="sourceLineNo">079</span><a id="line.79"></a>
+<span class="sourceLineNo">080</span><a id="line.80">  /**</a>
+<span class="sourceLineNo">081</span><a id="line.81">   * The access_flags field of the JVMS ClassFile structure. This field can contain ASM specific</a>
+<span class="sourceLineNo">082</span><a id="line.82">   * access flags, such as {@link Opcodes#ACC_DEPRECATED}, which are removed when generating the</a>
+<span class="sourceLineNo">083</span><a id="line.83">   * ClassFile structure.</a>
+<span class="sourceLineNo">084</span><a id="line.84">   */</a>
+<span class="sourceLineNo">085</span><a id="line.85">  private int accessFlags;</a>
+<span class="sourceLineNo">086</span><a id="line.86"></a>
+<span class="sourceLineNo">087</span><a id="line.87">  /** The this_class field of the JVMS ClassFile structure. */</a>
+<span class="sourceLineNo">088</span><a id="line.88">  private int thisClass;</a>
+<span class="sourceLineNo">089</span><a id="line.89"></a>
+<span class="sourceLineNo">090</span><a id="line.90">  /** The super_class field of the JVMS ClassFile structure. */</a>
+<span class="sourceLineNo">091</span><a id="line.91">  private int superClass;</a>
+<span class="sourceLineNo">092</span><a id="line.92"></a>
+<span class="sourceLineNo">093</span><a id="line.93">  /** The interface_count field of the JVMS ClassFile structure. */</a>
+<span class="sourceLineNo">094</span><a id="line.94">  private int interfaceCount;</a>
+<span class="sourceLineNo">095</span><a id="line.95"></a>
+<span class="sourceLineNo">096</span><a id="line.96">  /** The 'interfaces' array of the JVMS ClassFile structure. */</a>
+<span class="sourceLineNo">097</span><a id="line.97">  private int[] interfaces;</a>
+<span class="sourceLineNo">098</span><a id="line.98"></a>
+<span class="sourceLineNo">099</span><a id="line.99">  /**</a>
+<span class="sourceLineNo">100</span><a id="line.100">   * The fields of this class, stored in a linked list of {@link FieldWriter} linked via their</a>
+<span class="sourceLineNo">101</span><a id="line.101">   * {@link FieldWriter#fv} field. This field stores the first element of this list.</a>
+<span class="sourceLineNo">102</span><a id="line.102">   */</a>
+<span class="sourceLineNo">103</span><a id="line.103">  private FieldWriter firstField;</a>
+<span class="sourceLineNo">104</span><a id="line.104"></a>
+<span class="sourceLineNo">105</span><a id="line.105">  /**</a>
+<span class="sourceLineNo">106</span><a id="line.106">   * The fields of this class, stored in a linked list of {@link FieldWriter} linked via their</a>
+<span class="sourceLineNo">107</span><a id="line.107">   * {@link FieldWriter#fv} field. This field stores the last element of this list.</a>
+<span class="sourceLineNo">108</span><a id="line.108">   */</a>
+<span class="sourceLineNo">109</span><a id="line.109">  private FieldWriter lastField;</a>
+<span class="sourceLineNo">110</span><a id="line.110"></a>
+<span class="sourceLineNo">111</span><a id="line.111">  /**</a>
+<span class="sourceLineNo">112</span><a id="line.112">   * The methods of this class, stored in a linked list of {@link MethodWriter} linked via their</a>
+<span class="sourceLineNo">113</span><a id="line.113">   * {@link MethodWriter#mv} field. This field stores the first element of this list.</a>
+<span class="sourceLineNo">114</span><a id="line.114">   */</a>
+<span class="sourceLineNo">115</span><a id="line.115">  private MethodWriter firstMethod;</a>
+<span class="sourceLineNo">116</span><a id="line.116"></a>
+<span class="sourceLineNo">117</span><a id="line.117">  /**</a>
+<span class="sourceLineNo">118</span><a id="line.118">   * The methods of this class, stored in a linked list of {@link MethodWriter} linked via their</a>
+<span class="sourceLineNo">119</span><a id="line.119">   * {@link MethodWriter#mv} field. This field stores the last element of this list.</a>
+<span class="sourceLineNo">120</span><a id="line.120">   */</a>
+<span class="sourceLineNo">121</span><a id="line.121">  private MethodWriter lastMethod;</a>
+<span class="sourceLineNo">122</span><a id="line.122"></a>
+<span class="sourceLineNo">123</span><a id="line.123">  /** The number_of_classes field of the InnerClasses attribute, or 0. */</a>
+<span class="sourceLineNo">124</span><a id="line.124">  private int numberOfInnerClasses;</a>
+<span class="sourceLineNo">125</span><a id="line.125"></a>
+<span class="sourceLineNo">126</span><a id="line.126">  /** The 'classes' array of the InnerClasses attribute, or &lt;tt&gt;null&lt;/tt&gt;. */</a>
+<span class="sourceLineNo">127</span><a id="line.127">  private ByteVector innerClasses;</a>
+<span class="sourceLineNo">128</span><a id="line.128"></a>
+<span class="sourceLineNo">129</span><a id="line.129">  /** The class_index field of the EnclosingMethod attribute, or 0. */</a>
+<span class="sourceLineNo">130</span><a id="line.130">  private int enclosingClassIndex;</a>
+<span class="sourceLineNo">131</span><a id="line.131"></a>
+<span class="sourceLineNo">132</span><a id="line.132">  /** The method_index field of the EnclosingMethod attribute. */</a>
+<span class="sourceLineNo">133</span><a id="line.133">  private int enclosingMethodIndex;</a>
+<span class="sourceLineNo">134</span><a id="line.134"></a>
+<span class="sourceLineNo">135</span><a id="line.135">  /** The signature_index field of the Signature attribute, or 0. */</a>
+<span class="sourceLineNo">136</span><a id="line.136">  private int signatureIndex;</a>
+<span class="sourceLineNo">137</span><a id="line.137"></a>
+<span class="sourceLineNo">138</span><a id="line.138">  /** The source_file_index field of the SourceFile attribute, or 0. */</a>
+<span class="sourceLineNo">139</span><a id="line.139">  private int sourceFileIndex;</a>
+<span class="sourceLineNo">140</span><a id="line.140"></a>
+<span class="sourceLineNo">141</span><a id="line.141">  /** The debug_extension field of the SourceDebugExtension attribute, or &lt;tt&gt;null&lt;/tt&gt;. */</a>
+<span class="sourceLineNo">142</span><a id="line.142">  private ByteVector debugExtension;</a>
+<span class="sourceLineNo">143</span><a id="line.143"></a>
+<span class="sourceLineNo">144</span><a id="line.144">  /**</a>
+<span class="sourceLineNo">145</span><a id="line.145">   * The last runtime visible annotation of this class. The previous ones can be accessed with the</a>
+<span class="sourceLineNo">146</span><a id="line.146">   * {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">147</span><a id="line.147">   */</a>
+<span class="sourceLineNo">148</span><a id="line.148">  private AnnotationWriter lastRuntimeVisibleAnnotation;</a>
+<span class="sourceLineNo">149</span><a id="line.149"></a>
+<span class="sourceLineNo">150</span><a id="line.150">  /**</a>
+<span class="sourceLineNo">151</span><a id="line.151">   * The last runtime invisible annotation of this class. The previous ones can be accessed with the</a>
+<span class="sourceLineNo">152</span><a id="line.152">   * {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">153</span><a id="line.153">   */</a>
+<span class="sourceLineNo">154</span><a id="line.154">  private AnnotationWriter lastRuntimeInvisibleAnnotation;</a>
+<span class="sourceLineNo">155</span><a id="line.155"></a>
+<span class="sourceLineNo">156</span><a id="line.156">  /**</a>
+<span class="sourceLineNo">157</span><a id="line.157">   * The last runtime visible type annotation of this class. The previous ones can be accessed with</a>
+<span class="sourceLineNo">158</span><a id="line.158">   * the {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">159</span><a id="line.159">   */</a>
+<span class="sourceLineNo">160</span><a id="line.160">  private AnnotationWriter lastRuntimeVisibleTypeAnnotation;</a>
+<span class="sourceLineNo">161</span><a id="line.161"></a>
+<span class="sourceLineNo">162</span><a id="line.162">  /**</a>
+<span class="sourceLineNo">163</span><a id="line.163">   * The last runtime invisible type annotation of this class. The previous ones can be accessed</a>
+<span class="sourceLineNo">164</span><a id="line.164">   * with the {@link AnnotationWriter#previousAnnotation} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">165</span><a id="line.165">   */</a>
+<span class="sourceLineNo">166</span><a id="line.166">  private AnnotationWriter lastRuntimeInvisibleTypeAnnotation;</a>
+<span class="sourceLineNo">167</span><a id="line.167"></a>
+<span class="sourceLineNo">168</span><a id="line.168">  /** The Module attribute of this class, or &lt;tt&gt;null&lt;/tt&gt;. */</a>
+<span class="sourceLineNo">169</span><a id="line.169">  private ModuleWriter moduleWriter;</a>
+<span class="sourceLineNo">170</span><a id="line.170"></a>
+<span class="sourceLineNo">171</span><a id="line.171">  /** The host_class_index field of the NestHost attribute, or 0. */</a>
+<span class="sourceLineNo">172</span><a id="line.172">  private int nestHostClassIndex;</a>
+<span class="sourceLineNo">173</span><a id="line.173"></a>
+<span class="sourceLineNo">174</span><a id="line.174">  /** The number_of_classes field of the NestMembers attribute, or 0. */</a>
+<span class="sourceLineNo">175</span><a id="line.175">  private int numberOfNestMemberClasses;</a>
+<span class="sourceLineNo">176</span><a id="line.176"></a>
+<span class="sourceLineNo">177</span><a id="line.177">  /** The 'classes' array of the NestMembers attribute, or &lt;tt&gt;null&lt;/tt&gt;. */</a>
+<span class="sourceLineNo">178</span><a id="line.178">  private ByteVector nestMemberClasses;</a>
+<span class="sourceLineNo">179</span><a id="line.179"></a>
+<span class="sourceLineNo">180</span><a id="line.180">  /**</a>
+<span class="sourceLineNo">181</span><a id="line.181">   * The first non standard attribute of this class. The next ones can be accessed with the {@link</a>
+<span class="sourceLineNo">182</span><a id="line.182">   * Attribute#nextAttribute} field. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">183</span><a id="line.183">   *</a>
+<span class="sourceLineNo">184</span><a id="line.184">   * &lt;p&gt;&lt;b&gt;WARNING&lt;/b&gt;: this list stores the attributes in the &lt;i&gt;reverse&lt;/i&gt; order of their visit.</a>
+<span class="sourceLineNo">185</span><a id="line.185">   * firstAttribute is actually the last attribute visited in {@link #visitAttribute}. The {@link</a>
+<span class="sourceLineNo">186</span><a id="line.186">   * #toByteArray} method writes the attributes in the order defined by this list, i.e. in the</a>
+<span class="sourceLineNo">187</span><a id="line.187">   * reverse order specified by the user.</a>
+<span class="sourceLineNo">188</span><a id="line.188">   */</a>
+<span class="sourceLineNo">189</span><a id="line.189">  private Attribute firstAttribute;</a>
+<span class="sourceLineNo">190</span><a id="line.190"></a>
+<span class="sourceLineNo">191</span><a id="line.191">  /**</a>
+<span class="sourceLineNo">192</span><a id="line.192">   * Indicates what must be automatically computed in {@link MethodWriter}. Must be one of {@link</a>
+<span class="sourceLineNo">193</span><a id="line.193">   * MethodWriter#COMPUTE_NOTHING}, {@link MethodWriter#COMPUTE_MAX_STACK_AND_LOCAL}, {@link</a>
+<span class="sourceLineNo">194</span><a id="line.194">   * MethodWriter#COMPUTE_INSERTED_FRAMES}, or {@link MethodWriter#COMPUTE_ALL_FRAMES}.</a>
+<span class="sourceLineNo">195</span><a id="line.195">   */</a>
+<span class="sourceLineNo">196</span><a id="line.196">  private int compute;</a>
+<span class="sourceLineNo">197</span><a id="line.197"></a>
+<span class="sourceLineNo">198</span><a id="line.198">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">199</span><a id="line.199">  // Constructor</a>
+<span class="sourceLineNo">200</span><a id="line.200">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">201</span><a id="line.201"></a>
+<span class="sourceLineNo">202</span><a id="line.202">  /**</a>
+<span class="sourceLineNo">203</span><a id="line.203">   * Constructs a new {@link ClassWriter} object.</a>
+<span class="sourceLineNo">204</span><a id="line.204">   *</a>
+<span class="sourceLineNo">205</span><a id="line.205">   * @param flags option flags that can be used to modify the default behavior of this class. Must</a>
+<span class="sourceLineNo">206</span><a id="line.206">   *     be zero or more of {@link #COMPUTE_MAXS} and {@link #COMPUTE_FRAMES}.</a>
+<span class="sourceLineNo">207</span><a id="line.207">   */</a>
+<span class="sourceLineNo">208</span><a id="line.208">  public ClassWriter(final int flags) {</a>
+<span class="sourceLineNo">209</span><a id="line.209">    this(null, flags);</a>
+<span class="sourceLineNo">210</span><a id="line.210">  }</a>
+<span class="sourceLineNo">211</span><a id="line.211"></a>
+<span class="sourceLineNo">212</span><a id="line.212">  /**</a>
+<span class="sourceLineNo">213</span><a id="line.213">   * Constructs a new {@link ClassWriter} object and enables optimizations for "mostly add" bytecode</a>
+<span class="sourceLineNo">214</span><a id="line.214">   * transformations. These optimizations are the following:</a>
+<span class="sourceLineNo">215</span><a id="line.215">   *</a>
+<span class="sourceLineNo">216</span><a id="line.216">   * &lt;ul&gt;</a>
+<span class="sourceLineNo">217</span><a id="line.217">   *   &lt;li&gt;The constant pool and bootstrap methods from the original class are copied as is in the</a>
+<span class="sourceLineNo">218</span><a id="line.218">   *       new class, which saves time. New constant pool entries and new bootstrap methods will be</a>
+<span class="sourceLineNo">219</span><a id="line.219">   *       added at the end if necessary, but unused constant pool entries or bootstrap methods</a>
+<span class="sourceLineNo">220</span><a id="line.220">   *       &lt;i&gt;won't be removed&lt;/i&gt;.</a>
+<span class="sourceLineNo">221</span><a id="line.221">   *   &lt;li&gt;Methods that are not transformed are copied as is in the new class, directly from the</a>
+<span class="sourceLineNo">222</span><a id="line.222">   *       original class bytecode (i.e. without emitting visit events for all the method</a>
+<span class="sourceLineNo">223</span><a id="line.223">   *       instructions), which saves a &lt;i&gt;lot&lt;/i&gt; of time. Untransformed methods are detected by</a>
+<span class="sourceLineNo">224</span><a id="line.224">   *       the fact that the {@link ClassReader} receives {@link MethodVisitor} objects that come</a>
+<span class="sourceLineNo">225</span><a id="line.225">   *       from a {@link ClassWriter} (and not from any other {@link ClassVisitor} instance).</a>
+<span class="sourceLineNo">226</span><a id="line.226">   * &lt;/ul&gt;</a>
+<span class="sourceLineNo">227</span><a id="line.227">   *</a>
+<span class="sourceLineNo">228</span><a id="line.228">   * @param classReader the {@link ClassReader} used to read the original class. It will be used to</a>
+<span class="sourceLineNo">229</span><a id="line.229">   *     copy the entire constant pool and bootstrap methods from the original class and also to</a>
+<span class="sourceLineNo">230</span><a id="line.230">   *     copy other fragments of original bytecode where applicable.</a>
+<span class="sourceLineNo">231</span><a id="line.231">   * @param flags option flags that can be used to modify the default behavior of this class.Must be</a>
+<span class="sourceLineNo">232</span><a id="line.232">   *     zero or more of {@link #COMPUTE_MAXS} and {@link #COMPUTE_FRAMES}. &lt;i&gt;These option flags do</a>
+<span class="sourceLineNo">233</span><a id="line.233">   *     not affect methods that are copied as is in the new class. This means that neither the</a>
+<span class="sourceLineNo">234</span><a id="line.234">   *     maximum stack size nor the stack frames will be computed for these methods&lt;/i&gt;.</a>
+<span class="sourceLineNo">235</span><a id="line.235">   */</a>
+<span class="sourceLineNo">236</span><a id="line.236">  public ClassWriter(final ClassReader classReader, final int flags) {</a>
+<span class="sourceLineNo">237</span><a id="line.237">    super(Opcodes.ASM6);</a>
+<span class="sourceLineNo">238</span><a id="line.238">    symbolTable = classReader == null ? new SymbolTable(this) : new SymbolTable(this, classReader);</a>
+<span class="sourceLineNo">239</span><a id="line.239">    if ((flags &amp; COMPUTE_FRAMES) != 0) {</a>
+<span class="sourceLineNo">240</span><a id="line.240">      this.compute = MethodWriter.COMPUTE_ALL_FRAMES;</a>
+<span class="sourceLineNo">241</span><a id="line.241">    } else if ((flags &amp; COMPUTE_MAXS) != 0) {</a>
+<span class="sourceLineNo">242</span><a id="line.242">      this.compute = MethodWriter.COMPUTE_MAX_STACK_AND_LOCAL;</a>
+<span class="sourceLineNo">243</span><a id="line.243">    } else {</a>
+<span class="sourceLineNo">244</span><a id="line.244">      this.compute = MethodWriter.COMPUTE_NOTHING;</a>
+<span class="sourceLineNo">245</span><a id="line.245">    }</a>
+<span class="sourceLineNo">246</span><a id="line.246">  }</a>
+<span class="sourceLineNo">247</span><a id="line.247"></a>
+<span class="sourceLineNo">248</span><a id="line.248">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">249</span><a id="line.249">  // Implementation of the ClassVisitor abstract class</a>
+<span class="sourceLineNo">250</span><a id="line.250">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">251</span><a id="line.251"></a>
+<span class="sourceLineNo">252</span><a id="line.252">  @Override</a>
+<span class="sourceLineNo">253</span><a id="line.253">  public final void visit(</a>
+<span class="sourceLineNo">254</span><a id="line.254">      final int version,</a>
+<span class="sourceLineNo">255</span><a id="line.255">      final int access,</a>
+<span class="sourceLineNo">256</span><a id="line.256">      final String name,</a>
+<span class="sourceLineNo">257</span><a id="line.257">      final String signature,</a>
+<span class="sourceLineNo">258</span><a id="line.258">      final String superName,</a>
+<span class="sourceLineNo">259</span><a id="line.259">      final String[] interfaces) {</a>
+<span class="sourceLineNo">260</span><a id="line.260">    this.version = version;</a>
+<span class="sourceLineNo">261</span><a id="line.261">    this.accessFlags = access;</a>
+<span class="sourceLineNo">262</span><a id="line.262">    this.thisClass = symbolTable.setMajorVersionAndClassName(version &amp; 0xFFFF, name);</a>
+<span class="sourceLineNo">263</span><a id="line.263">    if (signature != null) {</a>
+<span class="sourceLineNo">264</span><a id="line.264">      this.signatureIndex = symbolTable.addConstantUtf8(signature);</a>
+<span class="sourceLineNo">265</span><a id="line.265">    }</a>
+<span class="sourceLineNo">266</span><a id="line.266">    this.superClass = superName == null ? 0 : symbolTable.addConstantClass(superName).index;</a>
+<span class="sourceLineNo">267</span><a id="line.267">    if (interfaces != null &amp;&amp; interfaces.length &gt; 0) {</a>
+<span class="sourceLineNo">268</span><a id="line.268">      interfaceCount = interfaces.length;</a>
+<span class="sourceLineNo">269</span><a id="line.269">      this.interfaces = new int[interfaceCount];</a>
+<span class="sourceLineNo">270</span><a id="line.270">      for (int i = 0; i &lt; interfaceCount; ++i) {</a>
+<span class="sourceLineNo">271</span><a id="line.271">        this.interfaces[i] = symbolTable.addConstantClass(interfaces[i]).index;</a>
+<span class="sourceLineNo">272</span><a id="line.272">      }</a>
+<span class="sourceLineNo">273</span><a id="line.273">    }</a>
+<span class="sourceLineNo">274</span><a id="line.274">    if (compute == MethodWriter.COMPUTE_MAX_STACK_AND_LOCAL &amp;&amp; (version &amp; 0xFFFF) &gt;= Opcodes.V1_7) {</a>
+<span class="sourceLineNo">275</span><a id="line.275">      compute = MethodWriter.COMPUTE_MAX_STACK_AND_LOCAL_FROM_FRAMES;</a>
+<span class="sourceLineNo">276</span><a id="line.276">    }</a>
+<span class="sourceLineNo">277</span><a id="line.277">  }</a>
+<span class="sourceLineNo">278</span><a id="line.278"></a>
+<span class="sourceLineNo">279</span><a id="line.279">  @Override</a>
+<span class="sourceLineNo">280</span><a id="line.280">  public final void visitSource(final String file, final String debug) {</a>
+<span class="sourceLineNo">281</span><a id="line.281">    if (file != null) {</a>
+<span class="sourceLineNo">282</span><a id="line.282">      sourceFileIndex = symbolTable.addConstantUtf8(file);</a>
+<span class="sourceLineNo">283</span><a id="line.283">    }</a>
+<span class="sourceLineNo">284</span><a id="line.284">    if (debug != null) {</a>
+<span class="sourceLineNo">285</span><a id="line.285">      debugExtension = new ByteVector().encodeUTF8(debug, 0, Integer.MAX_VALUE);</a>
+<span class="sourceLineNo">286</span><a id="line.286">    }</a>
+<span class="sourceLineNo">287</span><a id="line.287">  }</a>
+<span class="sourceLineNo">288</span><a id="line.288"></a>
+<span class="sourceLineNo">289</span><a id="line.289">  @Override</a>
+<span class="sourceLineNo">290</span><a id="line.290">  public final ModuleVisitor visitModule(</a>
+<span class="sourceLineNo">291</span><a id="line.291">      final String name, final int access, final String version) {</a>
+<span class="sourceLineNo">292</span><a id="line.292">    return moduleWriter =</a>
+<span class="sourceLineNo">293</span><a id="line.293">        new ModuleWriter(</a>
+<span class="sourceLineNo">294</span><a id="line.294">            symbolTable,</a>
+<span class="sourceLineNo">295</span><a id="line.295">            symbolTable.addConstantModule(name).index,</a>
+<span class="sourceLineNo">296</span><a id="line.296">            access,</a>
+<span class="sourceLineNo">297</span><a id="line.297">            version == null ? 0 : symbolTable.addConstantUtf8(version));</a>
+<span class="sourceLineNo">298</span><a id="line.298">  }</a>
+<span class="sourceLineNo">299</span><a id="line.299"></a>
+<span class="sourceLineNo">300</span><a id="line.300">  @Override</a>
+<span class="sourceLineNo">301</span><a id="line.301">  public void visitNestHostExperimental(final String nestHost) {</a>
+<span class="sourceLineNo">302</span><a id="line.302">    nestHostClassIndex = symbolTable.addConstantClass(nestHost).index;</a>
+<span class="sourceLineNo">303</span><a id="line.303">  }</a>
+<span class="sourceLineNo">304</span><a id="line.304"></a>
+<span class="sourceLineNo">305</span><a id="line.305">  @Override</a>
+<span class="sourceLineNo">306</span><a id="line.306">  public final void visitOuterClass(</a>
+<span class="sourceLineNo">307</span><a id="line.307">      final String owner, final String name, final String descriptor) {</a>
+<span class="sourceLineNo">308</span><a id="line.308">    enclosingClassIndex = symbolTable.addConstantClass(owner).index;</a>
+<span class="sourceLineNo">309</span><a id="line.309">    if (name != null &amp;&amp; descriptor != null) {</a>
+<span class="sourceLineNo">310</span><a id="line.310">      enclosingMethodIndex = symbolTable.addConstantNameAndType(name, descriptor);</a>
+<span class="sourceLineNo">311</span><a id="line.311">    }</a>
+<span class="sourceLineNo">312</span><a id="line.312">  }</a>
+<span class="sourceLineNo">313</span><a id="line.313"></a>
+<span class="sourceLineNo">314</span><a id="line.314">  @Override</a>
+<span class="sourceLineNo">315</span><a id="line.315">  public final AnnotationVisitor visitAnnotation(final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">316</span><a id="line.316">    // Create a ByteVector to hold an 'annotation' JVMS structure.</a>
+<span class="sourceLineNo">317</span><a id="line.317">    // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.7.16.</a>
+<span class="sourceLineNo">318</span><a id="line.318">    ByteVector annotation = new ByteVector();</a>
+<span class="sourceLineNo">319</span><a id="line.319">    // Write type_index and reserve space for num_element_value_pairs.</a>
+<span class="sourceLineNo">320</span><a id="line.320">    annotation.putShort(symbolTable.addConstantUtf8(descriptor)).putShort(0);</a>
+<span class="sourceLineNo">321</span><a id="line.321">    if (visible) {</a>
+<span class="sourceLineNo">322</span><a id="line.322">      return lastRuntimeVisibleAnnotation =</a>
+<span class="sourceLineNo">323</span><a id="line.323">          new AnnotationWriter(symbolTable, annotation, lastRuntimeVisibleAnnotation);</a>
+<span class="sourceLineNo">324</span><a id="line.324">    } else {</a>
+<span class="sourceLineNo">325</span><a id="line.325">      return lastRuntimeInvisibleAnnotation =</a>
+<span class="sourceLineNo">326</span><a id="line.326">          new AnnotationWriter(symbolTable, annotation, lastRuntimeInvisibleAnnotation);</a>
+<span class="sourceLineNo">327</span><a id="line.327">    }</a>
+<span class="sourceLineNo">328</span><a id="line.328">  }</a>
+<span class="sourceLineNo">329</span><a id="line.329"></a>
+<span class="sourceLineNo">330</span><a id="line.330">  @Override</a>
+<span class="sourceLineNo">331</span><a id="line.331">  public final AnnotationVisitor visitTypeAnnotation(</a>
+<span class="sourceLineNo">332</span><a id="line.332">      final int typeRef, final TypePath typePath, final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">333</span><a id="line.333">    // Create a ByteVector to hold a 'type_annotation' JVMS structure.</a>
+<span class="sourceLineNo">334</span><a id="line.334">    // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.7.20.</a>
+<span class="sourceLineNo">335</span><a id="line.335">    ByteVector typeAnnotation = new ByteVector();</a>
+<span class="sourceLineNo">336</span><a id="line.336">    // Write target_type, target_info, and target_path.</a>
+<span class="sourceLineNo">337</span><a id="line.337">    TypeReference.putTarget(typeRef, typeAnnotation);</a>
+<span class="sourceLineNo">338</span><a id="line.338">    TypePath.put(typePath, typeAnnotation);</a>
+<span class="sourceLineNo">339</span><a id="line.339">    // Write type_index and reserve space for num_element_value_pairs.</a>
+<span class="sourceLineNo">340</span><a id="line.340">    typeAnnotation.putShort(symbolTable.addConstantUtf8(descriptor)).putShort(0);</a>
+<span class="sourceLineNo">341</span><a id="line.341">    if (visible) {</a>
+<span class="sourceLineNo">342</span><a id="line.342">      return lastRuntimeVisibleTypeAnnotation =</a>
+<span class="sourceLineNo">343</span><a id="line.343">          new AnnotationWriter(symbolTable, typeAnnotation, lastRuntimeVisibleTypeAnnotation);</a>
+<span class="sourceLineNo">344</span><a id="line.344">    } else {</a>
+<span class="sourceLineNo">345</span><a id="line.345">      return lastRuntimeInvisibleTypeAnnotation =</a>
+<span class="sourceLineNo">346</span><a id="line.346">          new AnnotationWriter(symbolTable, typeAnnotation, lastRuntimeInvisibleTypeAnnotation);</a>
+<span class="sourceLineNo">347</span><a id="line.347">    }</a>
+<span class="sourceLineNo">348</span><a id="line.348">  }</a>
+<span class="sourceLineNo">349</span><a id="line.349"></a>
+<span class="sourceLineNo">350</span><a id="line.350">  @Override</a>
+<span class="sourceLineNo">351</span><a id="line.351">  public final void visitAttribute(final Attribute attribute) {</a>
+<span class="sourceLineNo">352</span><a id="line.352">    // Store the attributes in the &lt;i&gt;reverse&lt;/i&gt; order of their visit by this method.</a>
+<span class="sourceLineNo">353</span><a id="line.353">    attribute.nextAttribute = firstAttribute;</a>
+<span class="sourceLineNo">354</span><a id="line.354">    firstAttribute = attribute;</a>
+<span class="sourceLineNo">355</span><a id="line.355">  }</a>
+<span class="sourceLineNo">356</span><a id="line.356"></a>
+<span class="sourceLineNo">357</span><a id="line.357">  @Override</a>
+<span class="sourceLineNo">358</span><a id="line.358">  public void visitNestMemberExperimental(final String nestMember) {</a>
+<span class="sourceLineNo">359</span><a id="line.359">    if (nestMemberClasses == null) {</a>
+<span class="sourceLineNo">360</span><a id="line.360">      nestMemberClasses = new ByteVector();</a>
+<span class="sourceLineNo">361</span><a id="line.361">    }</a>
+<span class="sourceLineNo">362</span><a id="line.362">    ++numberOfNestMemberClasses;</a>
+<span class="sourceLineNo">363</span><a id="line.363">    nestMemberClasses.putShort(symbolTable.addConstantClass(nestMember).index);</a>
+<span class="sourceLineNo">364</span><a id="line.364">  }</a>
+<span class="sourceLineNo">365</span><a id="line.365"></a>
+<span class="sourceLineNo">366</span><a id="line.366">  @Override</a>
+<span class="sourceLineNo">367</span><a id="line.367">  public final void visitInnerClass(</a>
+<span class="sourceLineNo">368</span><a id="line.368">      final String name, final String outerName, final String innerName, final int access) {</a>
+<span class="sourceLineNo">369</span><a id="line.369">    if (innerClasses == null) {</a>
+<span class="sourceLineNo">370</span><a id="line.370">      innerClasses = new ByteVector();</a>
+<span class="sourceLineNo">371</span><a id="line.371">    }</a>
+<span class="sourceLineNo">372</span><a id="line.372">    // Section 4.7.6 of the JVMS states "Every CONSTANT_Class_info entry in the constant_pool table</a>
+<span class="sourceLineNo">373</span><a id="line.373">    // which represents a class or interface C that is not a package member must have exactly one</a>
+<span class="sourceLineNo">374</span><a id="line.374">    // corresponding entry in the classes array". To avoid duplicates we keep track in the info</a>
+<span class="sourceLineNo">375</span><a id="line.375">    // field of the Symbol of each CONSTANT_Class_info entry C whether an inner class entry has</a>
+<span class="sourceLineNo">376</span><a id="line.376">    // already been added for C. If so, we store the index of this inner class entry (plus one) in</a>
+<span class="sourceLineNo">377</span><a id="line.377">    // the info field. This trick allows duplicate detection in O(1) time.</a>
+<span class="sourceLineNo">378</span><a id="line.378">    Symbol nameSymbol = symbolTable.addConstantClass(name);</a>
+<span class="sourceLineNo">379</span><a id="line.379">    if (nameSymbol.info == 0) {</a>
+<span class="sourceLineNo">380</span><a id="line.380">      ++numberOfInnerClasses;</a>
+<span class="sourceLineNo">381</span><a id="line.381">      innerClasses.putShort(nameSymbol.index);</a>
+<span class="sourceLineNo">382</span><a id="line.382">      innerClasses.putShort(outerName == null ? 0 : symbolTable.addConstantClass(outerName).index);</a>
+<span class="sourceLineNo">383</span><a id="line.383">      innerClasses.putShort(innerName == null ? 0 : symbolTable.addConstantUtf8(innerName));</a>
+<span class="sourceLineNo">384</span><a id="line.384">      innerClasses.putShort(access);</a>
+<span class="sourceLineNo">385</span><a id="line.385">      nameSymbol.info = numberOfInnerClasses;</a>
+<span class="sourceLineNo">386</span><a id="line.386">    } else {</a>
+<span class="sourceLineNo">387</span><a id="line.387">      // Compare the inner classes entry nameSymbol.info - 1 with the arguments of this method and</a>
+<span class="sourceLineNo">388</span><a id="line.388">      // throw an exception if there is a difference?</a>
+<span class="sourceLineNo">389</span><a id="line.389">    }</a>
+<span class="sourceLineNo">390</span><a id="line.390">  }</a>
+<span class="sourceLineNo">391</span><a id="line.391"></a>
+<span class="sourceLineNo">392</span><a id="line.392">  @Override</a>
+<span class="sourceLineNo">393</span><a id="line.393">  public final FieldVisitor visitField(</a>
+<span class="sourceLineNo">394</span><a id="line.394">      final int access,</a>
+<span class="sourceLineNo">395</span><a id="line.395">      final String name,</a>
+<span class="sourceLineNo">396</span><a id="line.396">      final String descriptor,</a>
+<span class="sourceLineNo">397</span><a id="line.397">      final String signature,</a>
+<span class="sourceLineNo">398</span><a id="line.398">      final Object value) {</a>
+<span class="sourceLineNo">399</span><a id="line.399">    FieldWriter fieldWriter =</a>
+<span class="sourceLineNo">400</span><a id="line.400">        new FieldWriter(symbolTable, access, name, descriptor, signature, value);</a>
+<span class="sourceLineNo">401</span><a id="line.401">    if (firstField == null) {</a>
+<span class="sourceLineNo">402</span><a id="line.402">      firstField = fieldWriter;</a>
+<span class="sourceLineNo">403</span><a id="line.403">    } else {</a>
+<span class="sourceLineNo">404</span><a id="line.404">      lastField.fv = fieldWriter;</a>
+<span class="sourceLineNo">405</span><a id="line.405">    }</a>
+<span class="sourceLineNo">406</span><a id="line.406">    return lastField = fieldWriter;</a>
+<span class="sourceLineNo">407</span><a id="line.407">  }</a>
+<span class="sourceLineNo">408</span><a id="line.408"></a>
+<span class="sourceLineNo">409</span><a id="line.409">  @Override</a>
+<span class="sourceLineNo">410</span><a id="line.410">  public final MethodVisitor visitMethod(</a>
+<span class="sourceLineNo">411</span><a id="line.411">      final int access,</a>
+<span class="sourceLineNo">412</span><a id="line.412">      final String name,</a>
+<span class="sourceLineNo">413</span><a id="line.413">      final String descriptor,</a>
+<span class="sourceLineNo">414</span><a id="line.414">      final String signature,</a>
+<span class="sourceLineNo">415</span><a id="line.415">      final String[] exceptions) {</a>
+<span class="sourceLineNo">416</span><a id="line.416">    MethodWriter methodWriter =</a>
+<span class="sourceLineNo">417</span><a id="line.417">        new MethodWriter(symbolTable, access, name, descriptor, signature, exceptions, compute);</a>
+<span class="sourceLineNo">418</span><a id="line.418">    if (firstMethod == null) {</a>
+<span class="sourceLineNo">419</span><a id="line.419">      firstMethod = methodWriter;</a>
+<span class="sourceLineNo">420</span><a id="line.420">    } else {</a>
+<span class="sourceLineNo">421</span><a id="line.421">      lastMethod.mv = methodWriter;</a>
+<span class="sourceLineNo">422</span><a id="line.422">    }</a>
+<span class="sourceLineNo">423</span><a id="line.423">    return lastMethod = methodWriter;</a>
+<span class="sourceLineNo">424</span><a id="line.424">  }</a>
+<span class="sourceLineNo">425</span><a id="line.425"></a>
+<span class="sourceLineNo">426</span><a id="line.426">  @Override</a>
+<span class="sourceLineNo">427</span><a id="line.427">  public final void visitEnd() {</a>
+<span class="sourceLineNo">428</span><a id="line.428">    // Nothing to do.</a>
+<span class="sourceLineNo">429</span><a id="line.429">  }</a>
+<span class="sourceLineNo">430</span><a id="line.430"></a>
+<span class="sourceLineNo">431</span><a id="line.431">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">432</span><a id="line.432">  // Other public methods</a>
+<span class="sourceLineNo">433</span><a id="line.433">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">434</span><a id="line.434"></a>
+<span class="sourceLineNo">435</span><a id="line.435">  /**</a>
+<span class="sourceLineNo">436</span><a id="line.436">   * Returns the content of the class file that was built by this ClassWriter.</a>
+<span class="sourceLineNo">437</span><a id="line.437">   *</a>
+<span class="sourceLineNo">438</span><a id="line.438">   * @return the binary content of the JVMS ClassFile structure that was built by this ClassWriter.</a>
+<span class="sourceLineNo">439</span><a id="line.439">   */</a>
+<span class="sourceLineNo">440</span><a id="line.440">  public byte[] toByteArray() {</a>
+<span class="sourceLineNo">441</span><a id="line.441">    // First step: compute the size in bytes of the ClassFile structure.</a>
+<span class="sourceLineNo">442</span><a id="line.442">    // The magic field uses 4 bytes, 10 mandatory fields (minor_version, major_version,</a>
+<span class="sourceLineNo">443</span><a id="line.443">    // constant_pool_count, access_flags, this_class, super_class, interfaces_count, fields_count,</a>
+<span class="sourceLineNo">444</span><a id="line.444">    // methods_count and attributes_count) use 2 bytes each, and each interface uses 2 bytes too.</a>
+<span class="sourceLineNo">445</span><a id="line.445">    int size = 24 + 2 * interfaceCount;</a>
+<span class="sourceLineNo">446</span><a id="line.446">    int fieldsCount = 0;</a>
+<span class="sourceLineNo">447</span><a id="line.447">    FieldWriter fieldWriter = firstField;</a>
+<span class="sourceLineNo">448</span><a id="line.448">    while (fieldWriter != null) {</a>
+<span class="sourceLineNo">449</span><a id="line.449">      ++fieldsCount;</a>
+<span class="sourceLineNo">450</span><a id="line.450">      size += fieldWriter.computeFieldInfoSize();</a>
+<span class="sourceLineNo">451</span><a id="line.451">      fieldWriter = (FieldWriter) fieldWriter.fv;</a>
+<span class="sourceLineNo">452</span><a id="line.452">    }</a>
+<span class="sourceLineNo">453</span><a id="line.453">    int methodsCount = 0;</a>
+<span class="sourceLineNo">454</span><a id="line.454">    MethodWriter methodWriter = firstMethod;</a>
+<span class="sourceLineNo">455</span><a id="line.455">    while (methodWriter != null) {</a>
+<span class="sourceLineNo">456</span><a id="line.456">      ++methodsCount;</a>
+<span class="sourceLineNo">457</span><a id="line.457">      size += methodWriter.computeMethodInfoSize();</a>
+<span class="sourceLineNo">458</span><a id="line.458">      methodWriter = (MethodWriter) methodWriter.mv;</a>
+<span class="sourceLineNo">459</span><a id="line.459">    }</a>
+<span class="sourceLineNo">460</span><a id="line.460">    // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">461</span><a id="line.461">    int attributesCount = 0;</a>
+<span class="sourceLineNo">462</span><a id="line.462">    if (innerClasses != null) {</a>
+<span class="sourceLineNo">463</span><a id="line.463">      ++attributesCount;</a>
+<span class="sourceLineNo">464</span><a id="line.464">      size += 8 + innerClasses.length;</a>
+<span class="sourceLineNo">465</span><a id="line.465">      symbolTable.addConstantUtf8(Constants.INNER_CLASSES);</a>
+<span class="sourceLineNo">466</span><a id="line.466">    }</a>
+<span class="sourceLineNo">467</span><a id="line.467">    if (enclosingClassIndex != 0) {</a>
+<span class="sourceLineNo">468</span><a id="line.468">      ++attributesCount;</a>
+<span class="sourceLineNo">469</span><a id="line.469">      size += 10;</a>
+<span class="sourceLineNo">470</span><a id="line.470">      symbolTable.addConstantUtf8(Constants.ENCLOSING_METHOD);</a>
+<span class="sourceLineNo">471</span><a id="line.471">    }</a>
+<span class="sourceLineNo">472</span><a id="line.472">    if ((accessFlags &amp; Opcodes.ACC_SYNTHETIC) != 0 &amp;&amp; (version &amp; 0xFFFF) &lt; Opcodes.V1_5) {</a>
+<span class="sourceLineNo">473</span><a id="line.473">      ++attributesCount;</a>
+<span class="sourceLineNo">474</span><a id="line.474">      size += 6;</a>
+<span class="sourceLineNo">475</span><a id="line.475">      symbolTable.addConstantUtf8(Constants.SYNTHETIC);</a>
+<span class="sourceLineNo">476</span><a id="line.476">    }</a>
+<span class="sourceLineNo">477</span><a id="line.477">    if (signatureIndex != 0) {</a>
+<span class="sourceLineNo">478</span><a id="line.478">      ++attributesCount;</a>
+<span class="sourceLineNo">479</span><a id="line.479">      size += 8;</a>
+<span class="sourceLineNo">480</span><a id="line.480">      symbolTable.addConstantUtf8(Constants.SIGNATURE);</a>
+<span class="sourceLineNo">481</span><a id="line.481">    }</a>
+<span class="sourceLineNo">482</span><a id="line.482">    if (sourceFileIndex != 0) {</a>
+<span class="sourceLineNo">483</span><a id="line.483">      ++attributesCount;</a>
+<span class="sourceLineNo">484</span><a id="line.484">      size += 8;</a>
+<span class="sourceLineNo">485</span><a id="line.485">      symbolTable.addConstantUtf8(Constants.SOURCE_FILE);</a>
+<span class="sourceLineNo">486</span><a id="line.486">    }</a>
+<span class="sourceLineNo">487</span><a id="line.487">    if (debugExtension != null) {</a>
+<span class="sourceLineNo">488</span><a id="line.488">      ++attributesCount;</a>
+<span class="sourceLineNo">489</span><a id="line.489">      size += 6 + debugExtension.length;</a>
+<span class="sourceLineNo">490</span><a id="line.490">      symbolTable.addConstantUtf8(Constants.SOURCE_DEBUG_EXTENSION);</a>
+<span class="sourceLineNo">491</span><a id="line.491">    }</a>
+<span class="sourceLineNo">492</span><a id="line.492">    if ((accessFlags &amp; Opcodes.ACC_DEPRECATED) != 0) {</a>
+<span class="sourceLineNo">493</span><a id="line.493">      ++attributesCount;</a>
+<span class="sourceLineNo">494</span><a id="line.494">      size += 6;</a>
+<span class="sourceLineNo">495</span><a id="line.495">      symbolTable.addConstantUtf8(Constants.DEPRECATED);</a>
+<span class="sourceLineNo">496</span><a id="line.496">    }</a>
+<span class="sourceLineNo">497</span><a id="line.497">    if (lastRuntimeVisibleAnnotation != null) {</a>
+<span class="sourceLineNo">498</span><a id="line.498">      ++attributesCount;</a>
+<span class="sourceLineNo">499</span><a id="line.499">      size +=</a>
+<span class="sourceLineNo">500</span><a id="line.500">          lastRuntimeVisibleAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">501</span><a id="line.501">              Constants.RUNTIME_VISIBLE_ANNOTATIONS);</a>
+<span class="sourceLineNo">502</span><a id="line.502">    }</a>
+<span class="sourceLineNo">503</span><a id="line.503">    if (lastRuntimeInvisibleAnnotation != null) {</a>
+<span class="sourceLineNo">504</span><a id="line.504">      ++attributesCount;</a>
+<span class="sourceLineNo">505</span><a id="line.505">      size +=</a>
+<span class="sourceLineNo">506</span><a id="line.506">          lastRuntimeInvisibleAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">507</span><a id="line.507">              Constants.RUNTIME_INVISIBLE_ANNOTATIONS);</a>
+<span class="sourceLineNo">508</span><a id="line.508">    }</a>
+<span class="sourceLineNo">509</span><a id="line.509">    if (lastRuntimeVisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">510</span><a id="line.510">      ++attributesCount;</a>
+<span class="sourceLineNo">511</span><a id="line.511">      size +=</a>
+<span class="sourceLineNo">512</span><a id="line.512">          lastRuntimeVisibleTypeAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">513</span><a id="line.513">              Constants.RUNTIME_VISIBLE_TYPE_ANNOTATIONS);</a>
+<span class="sourceLineNo">514</span><a id="line.514">    }</a>
+<span class="sourceLineNo">515</span><a id="line.515">    if (lastRuntimeInvisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">516</span><a id="line.516">      ++attributesCount;</a>
+<span class="sourceLineNo">517</span><a id="line.517">      size +=</a>
+<span class="sourceLineNo">518</span><a id="line.518">          lastRuntimeInvisibleTypeAnnotation.computeAnnotationsSize(</a>
+<span class="sourceLineNo">519</span><a id="line.519">              Constants.RUNTIME_INVISIBLE_TYPE_ANNOTATIONS);</a>
+<span class="sourceLineNo">520</span><a id="line.520">    }</a>
+<span class="sourceLineNo">521</span><a id="line.521">    if (symbolTable.computeBootstrapMethodsSize() &gt; 0) {</a>
+<span class="sourceLineNo">522</span><a id="line.522">      ++attributesCount;</a>
+<span class="sourceLineNo">523</span><a id="line.523">      size += symbolTable.computeBootstrapMethodsSize();</a>
+<span class="sourceLineNo">524</span><a id="line.524">    }</a>
+<span class="sourceLineNo">525</span><a id="line.525">    if (moduleWriter != null) {</a>
+<span class="sourceLineNo">526</span><a id="line.526">      attributesCount += moduleWriter.getAttributeCount();</a>
+<span class="sourceLineNo">527</span><a id="line.527">      size += moduleWriter.computeAttributesSize();</a>
+<span class="sourceLineNo">528</span><a id="line.528">    }</a>
+<span class="sourceLineNo">529</span><a id="line.529">    if (nestHostClassIndex != 0) {</a>
+<span class="sourceLineNo">530</span><a id="line.530">      ++attributesCount;</a>
+<span class="sourceLineNo">531</span><a id="line.531">      size += 8;</a>
+<span class="sourceLineNo">532</span><a id="line.532">      symbolTable.addConstantUtf8(Constants.NEST_HOST);</a>
+<span class="sourceLineNo">533</span><a id="line.533">    }</a>
+<span class="sourceLineNo">534</span><a id="line.534">    if (nestMemberClasses != null) {</a>
+<span class="sourceLineNo">535</span><a id="line.535">      ++attributesCount;</a>
+<span class="sourceLineNo">536</span><a id="line.536">      size += 8 + nestMemberClasses.length;</a>
+<span class="sourceLineNo">537</span><a id="line.537">      symbolTable.addConstantUtf8(Constants.NEST_MEMBERS);</a>
+<span class="sourceLineNo">538</span><a id="line.538">    }</a>
+<span class="sourceLineNo">539</span><a id="line.539">    if (firstAttribute != null) {</a>
+<span class="sourceLineNo">540</span><a id="line.540">      attributesCount += firstAttribute.getAttributeCount();</a>
+<span class="sourceLineNo">541</span><a id="line.541">      size += firstAttribute.computeAttributesSize(symbolTable);</a>
+<span class="sourceLineNo">542</span><a id="line.542">    }</a>
+<span class="sourceLineNo">543</span><a id="line.543">    // IMPORTANT: this must be the last part of the ClassFile size computation, because the previous</a>
+<span class="sourceLineNo">544</span><a id="line.544">    // statements can add attribute names to the constant pool, thereby changing its size!</a>
+<span class="sourceLineNo">545</span><a id="line.545">    size += symbolTable.getConstantPoolLength();</a>
+<span class="sourceLineNo">546</span><a id="line.546">    if (symbolTable.getConstantPoolCount() &gt; 0xFFFF) {</a>
+<span class="sourceLineNo">547</span><a id="line.547">      throw new IndexOutOfBoundsException("Class file too large!");</a>
+<span class="sourceLineNo">548</span><a id="line.548">    }</a>
+<span class="sourceLineNo">549</span><a id="line.549"></a>
+<span class="sourceLineNo">550</span><a id="line.550">    // Second step: allocate a ByteVector of the correct size (in order to avoid any array copy in</a>
+<span class="sourceLineNo">551</span><a id="line.551">    // dynamic resizes) and fill it with the ClassFile content.</a>
+<span class="sourceLineNo">552</span><a id="line.552">    ByteVector result = new ByteVector(size);</a>
+<span class="sourceLineNo">553</span><a id="line.553">    result.putInt(0xCAFEBABE).putInt(version);</a>
+<span class="sourceLineNo">554</span><a id="line.554">    symbolTable.putConstantPool(result);</a>
+<span class="sourceLineNo">555</span><a id="line.555">    int mask = (version &amp; 0xFFFF) &lt; Opcodes.V1_5 ? Opcodes.ACC_SYNTHETIC : 0;</a>
+<span class="sourceLineNo">556</span><a id="line.556">    result.putShort(accessFlags &amp; ~mask).putShort(thisClass).putShort(superClass);</a>
+<span class="sourceLineNo">557</span><a id="line.557">    result.putShort(interfaceCount);</a>
+<span class="sourceLineNo">558</span><a id="line.558">    for (int i = 0; i &lt; interfaceCount; ++i) {</a>
+<span class="sourceLineNo">559</span><a id="line.559">      result.putShort(interfaces[i]);</a>
+<span class="sourceLineNo">560</span><a id="line.560">    }</a>
+<span class="sourceLineNo">561</span><a id="line.561">    result.putShort(fieldsCount);</a>
+<span class="sourceLineNo">562</span><a id="line.562">    fieldWriter = firstField;</a>
+<span class="sourceLineNo">563</span><a id="line.563">    while (fieldWriter != null) {</a>
+<span class="sourceLineNo">564</span><a id="line.564">      fieldWriter.putFieldInfo(result);</a>
+<span class="sourceLineNo">565</span><a id="line.565">      fieldWriter = (FieldWriter) fieldWriter.fv;</a>
+<span class="sourceLineNo">566</span><a id="line.566">    }</a>
+<span class="sourceLineNo">567</span><a id="line.567">    result.putShort(methodsCount);</a>
+<span class="sourceLineNo">568</span><a id="line.568">    boolean hasFrames = false;</a>
+<span class="sourceLineNo">569</span><a id="line.569">    boolean hasAsmInstructions = false;</a>
+<span class="sourceLineNo">570</span><a id="line.570">    methodWriter = firstMethod;</a>
+<span class="sourceLineNo">571</span><a id="line.571">    while (methodWriter != null) {</a>
+<span class="sourceLineNo">572</span><a id="line.572">      hasFrames |= methodWriter.hasFrames();</a>
+<span class="sourceLineNo">573</span><a id="line.573">      hasAsmInstructions |= methodWriter.hasAsmInstructions();</a>
+<span class="sourceLineNo">574</span><a id="line.574">      methodWriter.putMethodInfo(result);</a>
+<span class="sourceLineNo">575</span><a id="line.575">      methodWriter = (MethodWriter) methodWriter.mv;</a>
+<span class="sourceLineNo">576</span><a id="line.576">    }</a>
+<span class="sourceLineNo">577</span><a id="line.577">    // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.</a>
+<span class="sourceLineNo">578</span><a id="line.578">    result.putShort(attributesCount);</a>
+<span class="sourceLineNo">579</span><a id="line.579">    if (innerClasses != null) {</a>
+<span class="sourceLineNo">580</span><a id="line.580">      result</a>
+<span class="sourceLineNo">581</span><a id="line.581">          .putShort(symbolTable.addConstantUtf8(Constants.INNER_CLASSES))</a>
+<span class="sourceLineNo">582</span><a id="line.582">          .putInt(innerClasses.length + 2)</a>
+<span class="sourceLineNo">583</span><a id="line.583">          .putShort(numberOfInnerClasses)</a>
+<span class="sourceLineNo">584</span><a id="line.584">          .putByteArray(innerClasses.data, 0, innerClasses.length);</a>
+<span class="sourceLineNo">585</span><a id="line.585">    }</a>
+<span class="sourceLineNo">586</span><a id="line.586">    if (enclosingClassIndex != 0) {</a>
+<span class="sourceLineNo">587</span><a id="line.587">      result</a>
+<span class="sourceLineNo">588</span><a id="line.588">          .putShort(symbolTable.addConstantUtf8(Constants.ENCLOSING_METHOD))</a>
+<span class="sourceLineNo">589</span><a id="line.589">          .putInt(4)</a>
+<span class="sourceLineNo">590</span><a id="line.590">          .putShort(enclosingClassIndex)</a>
+<span class="sourceLineNo">591</span><a id="line.591">          .putShort(enclosingMethodIndex);</a>
+<span class="sourceLineNo">592</span><a id="line.592">    }</a>
+<span class="sourceLineNo">593</span><a id="line.593">    if ((accessFlags &amp; Opcodes.ACC_SYNTHETIC) != 0 &amp;&amp; (version &amp; 0xFFFF) &lt; Opcodes.V1_5) {</a>
+<span class="sourceLineNo">594</span><a id="line.594">      result.putShort(symbolTable.addConstantUtf8(Constants.SYNTHETIC)).putInt(0);</a>
+<span class="sourceLineNo">595</span><a id="line.595">    }</a>
+<span class="sourceLineNo">596</span><a id="line.596">    if (signatureIndex != 0) {</a>
+<span class="sourceLineNo">597</span><a id="line.597">      result</a>
+<span class="sourceLineNo">598</span><a id="line.598">          .putShort(symbolTable.addConstantUtf8(Constants.SIGNATURE))</a>
+<span class="sourceLineNo">599</span><a id="line.599">          .putInt(2)</a>
+<span class="sourceLineNo">600</span><a id="line.600">          .putShort(signatureIndex);</a>
+<span class="sourceLineNo">601</span><a id="line.601">    }</a>
+<span class="sourceLineNo">602</span><a id="line.602">    if (sourceFileIndex != 0) {</a>
+<span class="sourceLineNo">603</span><a id="line.603">      result</a>
+<span class="sourceLineNo">604</span><a id="line.604">          .putShort(symbolTable.addConstantUtf8(Constants.SOURCE_FILE))</a>
+<span class="sourceLineNo">605</span><a id="line.605">          .putInt(2)</a>
+<span class="sourceLineNo">606</span><a id="line.606">          .putShort(sourceFileIndex);</a>
+<span class="sourceLineNo">607</span><a id="line.607">    }</a>
+<span class="sourceLineNo">608</span><a id="line.608">    if (debugExtension != null) {</a>
+<span class="sourceLineNo">609</span><a id="line.609">      int length = debugExtension.length;</a>
+<span class="sourceLineNo">610</span><a id="line.610">      result</a>
+<span class="sourceLineNo">611</span><a id="line.611">          .putShort(symbolTable.addConstantUtf8(Constants.SOURCE_DEBUG_EXTENSION))</a>
+<span class="sourceLineNo">612</span><a id="line.612">          .putInt(length)</a>
+<span class="sourceLineNo">613</span><a id="line.613">          .putByteArray(debugExtension.data, 0, length);</a>
+<span class="sourceLineNo">614</span><a id="line.614">    }</a>
+<span class="sourceLineNo">615</span><a id="line.615">    if ((accessFlags &amp; Opcodes.ACC_DEPRECATED) != 0) {</a>
+<span class="sourceLineNo">616</span><a id="line.616">      result.putShort(symbolTable.addConstantUtf8(Constants.DEPRECATED)).putInt(0);</a>
+<span class="sourceLineNo">617</span><a id="line.617">    }</a>
+<span class="sourceLineNo">618</span><a id="line.618">    if (lastRuntimeVisibleAnnotation != null) {</a>
+<span class="sourceLineNo">619</span><a id="line.619">      lastRuntimeVisibleAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">620</span><a id="line.620">          symbolTable.addConstantUtf8(Constants.RUNTIME_VISIBLE_ANNOTATIONS), result);</a>
+<span class="sourceLineNo">621</span><a id="line.621">    }</a>
+<span class="sourceLineNo">622</span><a id="line.622">    if (lastRuntimeInvisibleAnnotation != null) {</a>
+<span class="sourceLineNo">623</span><a id="line.623">      lastRuntimeInvisibleAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">624</span><a id="line.624">          symbolTable.addConstantUtf8(Constants.RUNTIME_INVISIBLE_ANNOTATIONS), result);</a>
+<span class="sourceLineNo">625</span><a id="line.625">    }</a>
+<span class="sourceLineNo">626</span><a id="line.626">    if (lastRuntimeVisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">627</span><a id="line.627">      lastRuntimeVisibleTypeAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">628</span><a id="line.628">          symbolTable.addConstantUtf8(Constants.RUNTIME_VISIBLE_TYPE_ANNOTATIONS), result);</a>
+<span class="sourceLineNo">629</span><a id="line.629">    }</a>
+<span class="sourceLineNo">630</span><a id="line.630">    if (lastRuntimeInvisibleTypeAnnotation != null) {</a>
+<span class="sourceLineNo">631</span><a id="line.631">      lastRuntimeInvisibleTypeAnnotation.putAnnotations(</a>
+<span class="sourceLineNo">632</span><a id="line.632">          symbolTable.addConstantUtf8(Constants.RUNTIME_INVISIBLE_TYPE_ANNOTATIONS), result);</a>
+<span class="sourceLineNo">633</span><a id="line.633">    }</a>
+<span class="sourceLineNo">634</span><a id="line.634">    symbolTable.putBootstrapMethods(result);</a>
+<span class="sourceLineNo">635</span><a id="line.635">    if (moduleWriter != null) {</a>
+<span class="sourceLineNo">636</span><a id="line.636">      moduleWriter.putAttributes(result);</a>
+<span class="sourceLineNo">637</span><a id="line.637">    }</a>
+<span class="sourceLineNo">638</span><a id="line.638">    if (nestHostClassIndex != 0) {</a>
+<span class="sourceLineNo">639</span><a id="line.639">      result</a>
+<span class="sourceLineNo">640</span><a id="line.640">          .putShort(symbolTable.addConstantUtf8(Constants.NEST_HOST))</a>
+<span class="sourceLineNo">641</span><a id="line.641">          .putInt(2)</a>
+<span class="sourceLineNo">642</span><a id="line.642">          .putShort(nestHostClassIndex);</a>
+<span class="sourceLineNo">643</span><a id="line.643">    }</a>
+<span class="sourceLineNo">644</span><a id="line.644">    if (nestMemberClasses != null) {</a>
+<span class="sourceLineNo">645</span><a id="line.645">      result</a>
+<span class="sourceLineNo">646</span><a id="line.646">          .putShort(symbolTable.addConstantUtf8(Constants.NEST_MEMBERS))</a>
+<span class="sourceLineNo">647</span><a id="line.647">          .putInt(nestMemberClasses.length + 2)</a>
+<span class="sourceLineNo">648</span><a id="line.648">          .putShort(numberOfNestMemberClasses)</a>
+<span class="sourceLineNo">649</span><a id="line.649">          .putByteArray(nestMemberClasses.data, 0, nestMemberClasses.length);</a>
+<span class="sourceLineNo">650</span><a id="line.650">    }</a>
+<span class="sourceLineNo">651</span><a id="line.651">    if (firstAttribute != null) {</a>
+<span class="sourceLineNo">652</span><a id="line.652">      firstAttribute.putAttributes(symbolTable, result);</a>
+<span class="sourceLineNo">653</span><a id="line.653">    }</a>
+<span class="sourceLineNo">654</span><a id="line.654"></a>
+<span class="sourceLineNo">655</span><a id="line.655">    // Third step: replace the ASM specific instructions, if any.</a>
+<span class="sourceLineNo">656</span><a id="line.656">    if (hasAsmInstructions) {</a>
+<span class="sourceLineNo">657</span><a id="line.657">      return replaceAsmInstructions(result.data, hasFrames);</a>
+<span class="sourceLineNo">658</span><a id="line.658">    } else {</a>
+<span class="sourceLineNo">659</span><a id="line.659">      return result.data;</a>
+<span class="sourceLineNo">660</span><a id="line.660">    }</a>
+<span class="sourceLineNo">661</span><a id="line.661">  }</a>
+<span class="sourceLineNo">662</span><a id="line.662"></a>
+<span class="sourceLineNo">663</span><a id="line.663">  /**</a>
+<span class="sourceLineNo">664</span><a id="line.664">   * Returns the equivalent of the given class file, with the ASM specific instructions replaced</a>
+<span class="sourceLineNo">665</span><a id="line.665">   * with standard ones. This is done with a ClassReader -&amp;gt; ClassWriter round trip.</a>
+<span class="sourceLineNo">666</span><a id="line.666">   *</a>
+<span class="sourceLineNo">667</span><a id="line.667">   * @param classFile a class file containing ASM specific instructions, generated by this</a>
+<span class="sourceLineNo">668</span><a id="line.668">   *     ClassWriter.</a>
+<span class="sourceLineNo">669</span><a id="line.669">   * @param hasFrames whether there is at least one stack map frames in 'classFile'.</a>
+<span class="sourceLineNo">670</span><a id="line.670">   * @return an equivalent of 'classFile', with the ASM specific instructions replaced with standard</a>
+<span class="sourceLineNo">671</span><a id="line.671">   *     ones.</a>
+<span class="sourceLineNo">672</span><a id="line.672">   */</a>
+<span class="sourceLineNo">673</span><a id="line.673">  private byte[] replaceAsmInstructions(final byte[] classFile, final boolean hasFrames) {</a>
+<span class="sourceLineNo">674</span><a id="line.674">    Attribute[] attributes = getAttributePrototypes();</a>
+<span class="sourceLineNo">675</span><a id="line.675">    firstField = null;</a>
+<span class="sourceLineNo">676</span><a id="line.676">    lastField = null;</a>
+<span class="sourceLineNo">677</span><a id="line.677">    firstMethod = null;</a>
+<span class="sourceLineNo">678</span><a id="line.678">    lastMethod = null;</a>
+<span class="sourceLineNo">679</span><a id="line.679">    lastRuntimeVisibleAnnotation = null;</a>
+<span class="sourceLineNo">680</span><a id="line.680">    lastRuntimeInvisibleAnnotation = null;</a>
+<span class="sourceLineNo">681</span><a id="line.681">    lastRuntimeVisibleTypeAnnotation = null;</a>
+<span class="sourceLineNo">682</span><a id="line.682">    lastRuntimeInvisibleTypeAnnotation = null;</a>
+<span class="sourceLineNo">683</span><a id="line.683">    moduleWriter = null;</a>
+<span class="sourceLineNo">684</span><a id="line.684">    nestHostClassIndex = 0;</a>
+<span class="sourceLineNo">685</span><a id="line.685">    numberOfNestMemberClasses = 0;</a>
+<span class="sourceLineNo">686</span><a id="line.686">    nestMemberClasses = null;</a>
+<span class="sourceLineNo">687</span><a id="line.687">    firstAttribute = null;</a>
+<span class="sourceLineNo">688</span><a id="line.688">    compute = hasFrames ? MethodWriter.COMPUTE_INSERTED_FRAMES : MethodWriter.COMPUTE_NOTHING;</a>
+<span class="sourceLineNo">689</span><a id="line.689">    new ClassReader(classFile, 0, /* checkClassVersion = */ false)</a>
+<span class="sourceLineNo">690</span><a id="line.690">        .accept(</a>
+<span class="sourceLineNo">691</span><a id="line.691">            this,</a>
+<span class="sourceLineNo">692</span><a id="line.692">            attributes,</a>
+<span class="sourceLineNo">693</span><a id="line.693">            (hasFrames ? ClassReader.EXPAND_FRAMES : 0) | ClassReader.EXPAND_ASM_INSNS);</a>
+<span class="sourceLineNo">694</span><a id="line.694">    return toByteArray();</a>
+<span class="sourceLineNo">695</span><a id="line.695">  }</a>
+<span class="sourceLineNo">696</span><a id="line.696"></a>
+<span class="sourceLineNo">697</span><a id="line.697">  /**</a>
+<span class="sourceLineNo">698</span><a id="line.698">   * Returns the prototypes of the attributes used by this class, its fields and its methods.</a>
+<span class="sourceLineNo">699</span><a id="line.699">   *</a>
+<span class="sourceLineNo">700</span><a id="line.700">   * @return the prototypes of the attributes used by this class, its fields and its methods.</a>
+<span class="sourceLineNo">701</span><a id="line.701">   */</a>
+<span class="sourceLineNo">702</span><a id="line.702">  private Attribute[] getAttributePrototypes() {</a>
+<span class="sourceLineNo">703</span><a id="line.703">    Attribute.Set attributePrototypes = new Attribute.Set();</a>
+<span class="sourceLineNo">704</span><a id="line.704">    attributePrototypes.addAttributes(firstAttribute);</a>
+<span class="sourceLineNo">705</span><a id="line.705">    FieldWriter fieldWriter = firstField;</a>
+<span class="sourceLineNo">706</span><a id="line.706">    while (fieldWriter != null) {</a>
+<span class="sourceLineNo">707</span><a id="line.707">      fieldWriter.collectAttributePrototypes(attributePrototypes);</a>
+<span class="sourceLineNo">708</span><a id="line.708">      fieldWriter = (FieldWriter) fieldWriter.fv;</a>
+<span class="sourceLineNo">709</span><a id="line.709">    }</a>
+<span class="sourceLineNo">710</span><a id="line.710">    MethodWriter methodWriter = firstMethod;</a>
+<span class="sourceLineNo">711</span><a id="line.711">    while (methodWriter != null) {</a>
+<span class="sourceLineNo">712</span><a id="line.712">      methodWriter.collectAttributePrototypes(attributePrototypes);</a>
+<span class="sourceLineNo">713</span><a id="line.713">      methodWriter = (MethodWriter) methodWriter.mv;</a>
+<span class="sourceLineNo">714</span><a id="line.714">    }</a>
+<span class="sourceLineNo">715</span><a id="line.715">    return attributePrototypes.toArray();</a>
+<span class="sourceLineNo">716</span><a id="line.716">  }</a>
+<span class="sourceLineNo">717</span><a id="line.717"></a>
+<span class="sourceLineNo">718</span><a id="line.718">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">719</span><a id="line.719">  // Utility methods: constant pool management for Attribute sub classes</a>
+<span class="sourceLineNo">720</span><a id="line.720">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">721</span><a id="line.721"></a>
+<span class="sourceLineNo">722</span><a id="line.722">  /**</a>
+<span class="sourceLineNo">723</span><a id="line.723">   * Adds a number or string constant to the constant pool of the class being build. Does nothing if</a>
+<span class="sourceLineNo">724</span><a id="line.724">   * the constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link</a>
+<span class="sourceLineNo">725</span><a id="line.725">   * Attribute} sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">726</span><a id="line.726">   *</a>
+<span class="sourceLineNo">727</span><a id="line.727">   * @param value the value of the constant to be added to the constant pool. This parameter must be</a>
+<span class="sourceLineNo">728</span><a id="line.728">   *     an {@link Integer}, a {@link Float}, a {@link Long}, a {@link Double} or a {@link String}.</a>
+<span class="sourceLineNo">729</span><a id="line.729">   * @return the index of a new or already existing constant item with the given value.</a>
+<span class="sourceLineNo">730</span><a id="line.730">   */</a>
+<span class="sourceLineNo">731</span><a id="line.731">  public int newConst(final Object value) {</a>
+<span class="sourceLineNo">732</span><a id="line.732">    return symbolTable.addConstant(value).index;</a>
+<span class="sourceLineNo">733</span><a id="line.733">  }</a>
+<span class="sourceLineNo">734</span><a id="line.734"></a>
+<span class="sourceLineNo">735</span><a id="line.735">  /**</a>
+<span class="sourceLineNo">736</span><a id="line.736">   * Adds an UTF8 string to the constant pool of the class being build. Does nothing if the constant</a>
+<span class="sourceLineNo">737</span><a id="line.737">   * pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute} sub</a>
+<span class="sourceLineNo">738</span><a id="line.738">   * classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">739</span><a id="line.739">   *</a>
+<span class="sourceLineNo">740</span><a id="line.740">   * @param value the String value.</a>
+<span class="sourceLineNo">741</span><a id="line.741">   * @return the index of a new or already existing UTF8 item.</a>
+<span class="sourceLineNo">742</span><a id="line.742">   */</a>
+<span class="sourceLineNo">743</span><a id="line.743">  public int newUTF8(final String value) {</a>
+<span class="sourceLineNo">744</span><a id="line.744">    return symbolTable.addConstantUtf8(value);</a>
+<span class="sourceLineNo">745</span><a id="line.745">  }</a>
+<span class="sourceLineNo">746</span><a id="line.746"></a>
+<span class="sourceLineNo">747</span><a id="line.747">  /**</a>
+<span class="sourceLineNo">748</span><a id="line.748">   * Adds a class reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">749</span><a id="line.749">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">750</span><a id="line.750">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">751</span><a id="line.751">   *</a>
+<span class="sourceLineNo">752</span><a id="line.752">   * @param value the internal name of the class.</a>
+<span class="sourceLineNo">753</span><a id="line.753">   * @return the index of a new or already existing class reference item.</a>
+<span class="sourceLineNo">754</span><a id="line.754">   */</a>
+<span class="sourceLineNo">755</span><a id="line.755">  public int newClass(final String value) {</a>
+<span class="sourceLineNo">756</span><a id="line.756">    return symbolTable.addConstantClass(value).index;</a>
+<span class="sourceLineNo">757</span><a id="line.757">  }</a>
+<span class="sourceLineNo">758</span><a id="line.758"></a>
+<span class="sourceLineNo">759</span><a id="line.759">  /**</a>
+<span class="sourceLineNo">760</span><a id="line.760">   * Adds a method type reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">761</span><a id="line.761">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">762</span><a id="line.762">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">763</span><a id="line.763">   *</a>
+<span class="sourceLineNo">764</span><a id="line.764">   * @param methodDescriptor method descriptor of the method type.</a>
+<span class="sourceLineNo">765</span><a id="line.765">   * @return the index of a new or already existing method type reference item.</a>
+<span class="sourceLineNo">766</span><a id="line.766">   */</a>
+<span class="sourceLineNo">767</span><a id="line.767">  public int newMethodType(final String methodDescriptor) {</a>
+<span class="sourceLineNo">768</span><a id="line.768">    return symbolTable.addConstantMethodType(methodDescriptor).index;</a>
+<span class="sourceLineNo">769</span><a id="line.769">  }</a>
+<span class="sourceLineNo">770</span><a id="line.770"></a>
+<span class="sourceLineNo">771</span><a id="line.771">  /**</a>
+<span class="sourceLineNo">772</span><a id="line.772">   * Adds a module reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">773</span><a id="line.773">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">774</span><a id="line.774">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">775</span><a id="line.775">   *</a>
+<span class="sourceLineNo">776</span><a id="line.776">   * @param moduleName name of the module.</a>
+<span class="sourceLineNo">777</span><a id="line.777">   * @return the index of a new or already existing module reference item.</a>
+<span class="sourceLineNo">778</span><a id="line.778">   */</a>
+<span class="sourceLineNo">779</span><a id="line.779">  public int newModule(final String moduleName) {</a>
+<span class="sourceLineNo">780</span><a id="line.780">    return symbolTable.addConstantModule(moduleName).index;</a>
+<span class="sourceLineNo">781</span><a id="line.781">  }</a>
+<span class="sourceLineNo">782</span><a id="line.782"></a>
+<span class="sourceLineNo">783</span><a id="line.783">  /**</a>
+<span class="sourceLineNo">784</span><a id="line.784">   * Adds a package reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">785</span><a id="line.785">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">786</span><a id="line.786">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">787</span><a id="line.787">   *</a>
+<span class="sourceLineNo">788</span><a id="line.788">   * @param packageName name of the package in its internal form.</a>
+<span class="sourceLineNo">789</span><a id="line.789">   * @return the index of a new or already existing module reference item.</a>
+<span class="sourceLineNo">790</span><a id="line.790">   */</a>
+<span class="sourceLineNo">791</span><a id="line.791">  public int newPackage(final String packageName) {</a>
+<span class="sourceLineNo">792</span><a id="line.792">    return symbolTable.addConstantPackage(packageName).index;</a>
+<span class="sourceLineNo">793</span><a id="line.793">  }</a>
+<span class="sourceLineNo">794</span><a id="line.794"></a>
+<span class="sourceLineNo">795</span><a id="line.795">  /**</a>
+<span class="sourceLineNo">796</span><a id="line.796">   * Adds a handle to the constant pool of the class being build. Does nothing if the constant pool</a>
+<span class="sourceLineNo">797</span><a id="line.797">   * already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute} sub classes,</a>
+<span class="sourceLineNo">798</span><a id="line.798">   * and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">799</span><a id="line.799">   *</a>
+<span class="sourceLineNo">800</span><a id="line.800">   * @param tag the kind of this handle. Must be {@link Opcodes#H_GETFIELD}, {@link</a>
+<span class="sourceLineNo">801</span><a id="line.801">   *     Opcodes#H_GETSTATIC}, {@link Opcodes#H_PUTFIELD}, {@link Opcodes#H_PUTSTATIC}, {@link</a>
+<span class="sourceLineNo">802</span><a id="line.802">   *     Opcodes#H_INVOKEVIRTUAL}, {@link Opcodes#H_INVOKESTATIC}, {@link Opcodes#H_INVOKESPECIAL},</a>
+<span class="sourceLineNo">803</span><a id="line.803">   *     {@link Opcodes#H_NEWINVOKESPECIAL} or {@link Opcodes#H_INVOKEINTERFACE}.</a>
+<span class="sourceLineNo">804</span><a id="line.804">   * @param owner the internal name of the field or method owner class.</a>
+<span class="sourceLineNo">805</span><a id="line.805">   * @param name the name of the field or method.</a>
+<span class="sourceLineNo">806</span><a id="line.806">   * @param descriptor the descriptor of the field or method.</a>
+<span class="sourceLineNo">807</span><a id="line.807">   * @return the index of a new or already existing method type reference item.</a>
+<span class="sourceLineNo">808</span><a id="line.808">   * @deprecated this method is superseded by {@link #newHandle(int, String, String, String,</a>
+<span class="sourceLineNo">809</span><a id="line.809">   *     boolean)}.</a>
+<span class="sourceLineNo">810</span><a id="line.810">   */</a>
+<span class="sourceLineNo">811</span><a id="line.811">  @Deprecated</a>
+<span class="sourceLineNo">812</span><a id="line.812">  public int newHandle(</a>
+<span class="sourceLineNo">813</span><a id="line.813">      final int tag, final String owner, final String name, final String descriptor) {</a>
+<span class="sourceLineNo">814</span><a id="line.814">    return newHandle(tag, owner, name, descriptor, tag == Opcodes.H_INVOKEINTERFACE);</a>
+<span class="sourceLineNo">815</span><a id="line.815">  }</a>
+<span class="sourceLineNo">816</span><a id="line.816"></a>
+<span class="sourceLineNo">817</span><a id="line.817">  /**</a>
+<span class="sourceLineNo">818</span><a id="line.818">   * Adds a handle to the constant pool of the class being build. Does nothing if the constant pool</a>
+<span class="sourceLineNo">819</span><a id="line.819">   * already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute} sub classes,</a>
+<span class="sourceLineNo">820</span><a id="line.820">   * and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">821</span><a id="line.821">   *</a>
+<span class="sourceLineNo">822</span><a id="line.822">   * @param tag the kind of this handle. Must be {@link Opcodes#H_GETFIELD}, {@link</a>
+<span class="sourceLineNo">823</span><a id="line.823">   *     Opcodes#H_GETSTATIC}, {@link Opcodes#H_PUTFIELD}, {@link Opcodes#H_PUTSTATIC}, {@link</a>
+<span class="sourceLineNo">824</span><a id="line.824">   *     Opcodes#H_INVOKEVIRTUAL}, {@link Opcodes#H_INVOKESTATIC}, {@link Opcodes#H_INVOKESPECIAL},</a>
+<span class="sourceLineNo">825</span><a id="line.825">   *     {@link Opcodes#H_NEWINVOKESPECIAL} or {@link Opcodes#H_INVOKEINTERFACE}.</a>
+<span class="sourceLineNo">826</span><a id="line.826">   * @param owner the internal name of the field or method owner class.</a>
+<span class="sourceLineNo">827</span><a id="line.827">   * @param name the name of the field or method.</a>
+<span class="sourceLineNo">828</span><a id="line.828">   * @param descriptor the descriptor of the field or method.</a>
+<span class="sourceLineNo">829</span><a id="line.829">   * @param isInterface true if the owner is an interface.</a>
+<span class="sourceLineNo">830</span><a id="line.830">   * @return the index of a new or already existing method type reference item.</a>
+<span class="sourceLineNo">831</span><a id="line.831">   */</a>
+<span class="sourceLineNo">832</span><a id="line.832">  public int newHandle(</a>
+<span class="sourceLineNo">833</span><a id="line.833">      final int tag,</a>
+<span class="sourceLineNo">834</span><a id="line.834">      final String owner,</a>
+<span class="sourceLineNo">835</span><a id="line.835">      final String name,</a>
+<span class="sourceLineNo">836</span><a id="line.836">      final String descriptor,</a>
+<span class="sourceLineNo">837</span><a id="line.837">      final boolean isInterface) {</a>
+<span class="sourceLineNo">838</span><a id="line.838">    return symbolTable.addConstantMethodHandle(tag, owner, name, descriptor, isInterface).index;</a>
+<span class="sourceLineNo">839</span><a id="line.839">  }</a>
+<span class="sourceLineNo">840</span><a id="line.840"></a>
+<span class="sourceLineNo">841</span><a id="line.841">  /**</a>
+<span class="sourceLineNo">842</span><a id="line.842">   * Adds a dynamic constant reference to the constant pool of the class being build. Does nothing</a>
+<span class="sourceLineNo">843</span><a id="line.843">   * if the constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link</a>
+<span class="sourceLineNo">844</span><a id="line.844">   * Attribute} sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">845</span><a id="line.845">   *</a>
+<span class="sourceLineNo">846</span><a id="line.846">   * @param name name of the invoked method.</a>
+<span class="sourceLineNo">847</span><a id="line.847">   * @param descriptor field descriptor of the constant type.</a>
+<span class="sourceLineNo">848</span><a id="line.848">   * @param bootstrapMethodHandle the bootstrap method.</a>
+<span class="sourceLineNo">849</span><a id="line.849">   * @param bootstrapMethodArguments the bootstrap method constant arguments.</a>
+<span class="sourceLineNo">850</span><a id="line.850">   * @return the index of a new or already existing dynamic constant reference item.</a>
+<span class="sourceLineNo">851</span><a id="line.851">   */</a>
+<span class="sourceLineNo">852</span><a id="line.852">  public int newConstantDynamic(</a>
+<span class="sourceLineNo">853</span><a id="line.853">      final String name,</a>
+<span class="sourceLineNo">854</span><a id="line.854">      final String descriptor,</a>
+<span class="sourceLineNo">855</span><a id="line.855">      final Handle bootstrapMethodHandle,</a>
+<span class="sourceLineNo">856</span><a id="line.856">      final Object... bootstrapMethodArguments) {</a>
+<span class="sourceLineNo">857</span><a id="line.857">    return symbolTable.addConstantDynamic(</a>
+<span class="sourceLineNo">858</span><a id="line.858">            name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments)</a>
+<span class="sourceLineNo">859</span><a id="line.859">        .index;</a>
+<span class="sourceLineNo">860</span><a id="line.860">  }</a>
+<span class="sourceLineNo">861</span><a id="line.861"></a>
+<span class="sourceLineNo">862</span><a id="line.862">  /**</a>
+<span class="sourceLineNo">863</span><a id="line.863">   * Adds an invokedynamic reference to the constant pool of the class being build. Does nothing if</a>
+<span class="sourceLineNo">864</span><a id="line.864">   * the constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link</a>
+<span class="sourceLineNo">865</span><a id="line.865">   * Attribute} sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">866</span><a id="line.866">   *</a>
+<span class="sourceLineNo">867</span><a id="line.867">   * @param name name of the invoked method.</a>
+<span class="sourceLineNo">868</span><a id="line.868">   * @param descriptor descriptor of the invoke method.</a>
+<span class="sourceLineNo">869</span><a id="line.869">   * @param bootstrapMethodHandle the bootstrap method.</a>
+<span class="sourceLineNo">870</span><a id="line.870">   * @param bootstrapMethodArguments the bootstrap method constant arguments.</a>
+<span class="sourceLineNo">871</span><a id="line.871">   * @return the index of a new or already existing invokedynamic reference item.</a>
+<span class="sourceLineNo">872</span><a id="line.872">   */</a>
+<span class="sourceLineNo">873</span><a id="line.873">  public int newInvokeDynamic(</a>
+<span class="sourceLineNo">874</span><a id="line.874">      final String name,</a>
+<span class="sourceLineNo">875</span><a id="line.875">      final String descriptor,</a>
+<span class="sourceLineNo">876</span><a id="line.876">      final Handle bootstrapMethodHandle,</a>
+<span class="sourceLineNo">877</span><a id="line.877">      final Object... bootstrapMethodArguments) {</a>
+<span class="sourceLineNo">878</span><a id="line.878">    return symbolTable.addConstantInvokeDynamic(</a>
+<span class="sourceLineNo">879</span><a id="line.879">            name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments)</a>
+<span class="sourceLineNo">880</span><a id="line.880">        .index;</a>
+<span class="sourceLineNo">881</span><a id="line.881">  }</a>
+<span class="sourceLineNo">882</span><a id="line.882"></a>
+<span class="sourceLineNo">883</span><a id="line.883">  /**</a>
+<span class="sourceLineNo">884</span><a id="line.884">   * Adds a field reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">885</span><a id="line.885">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">886</span><a id="line.886">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">887</span><a id="line.887">   *</a>
+<span class="sourceLineNo">888</span><a id="line.888">   * @param owner the internal name of the field's owner class.</a>
+<span class="sourceLineNo">889</span><a id="line.889">   * @param name the field's name.</a>
+<span class="sourceLineNo">890</span><a id="line.890">   * @param descriptor the field's descriptor.</a>
+<span class="sourceLineNo">891</span><a id="line.891">   * @return the index of a new or already existing field reference item.</a>
+<span class="sourceLineNo">892</span><a id="line.892">   */</a>
+<span class="sourceLineNo">893</span><a id="line.893">  public int newField(final String owner, final String name, final String descriptor) {</a>
+<span class="sourceLineNo">894</span><a id="line.894">    return symbolTable.addConstantFieldref(owner, name, descriptor).index;</a>
+<span class="sourceLineNo">895</span><a id="line.895">  }</a>
+<span class="sourceLineNo">896</span><a id="line.896"></a>
+<span class="sourceLineNo">897</span><a id="line.897">  /**</a>
+<span class="sourceLineNo">898</span><a id="line.898">   * Adds a method reference to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">899</span><a id="line.899">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">900</span><a id="line.900">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">901</span><a id="line.901">   *</a>
+<span class="sourceLineNo">902</span><a id="line.902">   * @param owner the internal name of the method's owner class.</a>
+<span class="sourceLineNo">903</span><a id="line.903">   * @param name the method's name.</a>
+<span class="sourceLineNo">904</span><a id="line.904">   * @param descriptor the method's descriptor.</a>
+<span class="sourceLineNo">905</span><a id="line.905">   * @param isInterface &lt;tt&gt;true&lt;/tt&gt; if &lt;tt&gt;owner&lt;/tt&gt; is an interface.</a>
+<span class="sourceLineNo">906</span><a id="line.906">   * @return the index of a new or already existing method reference item.</a>
+<span class="sourceLineNo">907</span><a id="line.907">   */</a>
+<span class="sourceLineNo">908</span><a id="line.908">  public int newMethod(</a>
+<span class="sourceLineNo">909</span><a id="line.909">      final String owner, final String name, final String descriptor, final boolean isInterface) {</a>
+<span class="sourceLineNo">910</span><a id="line.910">    return symbolTable.addConstantMethodref(owner, name, descriptor, isInterface).index;</a>
+<span class="sourceLineNo">911</span><a id="line.911">  }</a>
+<span class="sourceLineNo">912</span><a id="line.912"></a>
+<span class="sourceLineNo">913</span><a id="line.913">  /**</a>
+<span class="sourceLineNo">914</span><a id="line.914">   * Adds a name and type to the constant pool of the class being build. Does nothing if the</a>
+<span class="sourceLineNo">915</span><a id="line.915">   * constant pool already contains a similar item. &lt;i&gt;This method is intended for {@link Attribute}</a>
+<span class="sourceLineNo">916</span><a id="line.916">   * sub classes, and is normally not needed by class generators or adapters.&lt;/i&gt;</a>
+<span class="sourceLineNo">917</span><a id="line.917">   *</a>
+<span class="sourceLineNo">918</span><a id="line.918">   * @param name a name.</a>
+<span class="sourceLineNo">919</span><a id="line.919">   * @param descriptor a type descriptor.</a>
+<span class="sourceLineNo">920</span><a id="line.920">   * @return the index of a new or already existing name and type item.</a>
+<span class="sourceLineNo">921</span><a id="line.921">   */</a>
+<span class="sourceLineNo">922</span><a id="line.922">  public int newNameType(final String name, final String descriptor) {</a>
+<span class="sourceLineNo">923</span><a id="line.923">    return symbolTable.addConstantNameAndType(name, descriptor);</a>
+<span class="sourceLineNo">924</span><a id="line.924">  }</a>
+<span class="sourceLineNo">925</span><a id="line.925"></a>
+<span class="sourceLineNo">926</span><a id="line.926">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">927</span><a id="line.927">  // Default method to compute common super classes when computing stack map frames</a>
+<span class="sourceLineNo">928</span><a id="line.928">  // -----------------------------------------------------------------------------------------------</a>
+<span class="sourceLineNo">929</span><a id="line.929"></a>
+<span class="sourceLineNo">930</span><a id="line.930">  /**</a>
+<span class="sourceLineNo">931</span><a id="line.931">   * Returns the common super type of the two given types. The default implementation of this method</a>
+<span class="sourceLineNo">932</span><a id="line.932">   * &lt;i&gt;loads&lt;/i&gt; the two given classes and uses the java.lang.Class methods to find the common</a>
+<span class="sourceLineNo">933</span><a id="line.933">   * super class. It can be overridden to compute this common super type in other ways, in</a>
+<span class="sourceLineNo">934</span><a id="line.934">   * particular without actually loading any class, or to take into account the class that is</a>
+<span class="sourceLineNo">935</span><a id="line.935">   * currently being generated by this ClassWriter, which can of course not be loaded since it is</a>
+<span class="sourceLineNo">936</span><a id="line.936">   * under construction.</a>
+<span class="sourceLineNo">937</span><a id="line.937">   *</a>
+<span class="sourceLineNo">938</span><a id="line.938">   * @param type1 the internal name of a class.</a>
+<span class="sourceLineNo">939</span><a id="line.939">   * @param type2 the internal name of another class.</a>
+<span class="sourceLineNo">940</span><a id="line.940">   * @return the internal name of the common super class of the two given classes.</a>
+<span class="sourceLineNo">941</span><a id="line.941">   */</a>
+<span class="sourceLineNo">942</span><a id="line.942">  protected String getCommonSuperClass(final String type1, final String type2) {</a>
+<span class="sourceLineNo">943</span><a id="line.943">    ClassLoader classLoader = getClass().getClassLoader();</a>
+<span class="sourceLineNo">944</span><a id="line.944">    Class&lt;?&gt; class1;</a>
+<span class="sourceLineNo">945</span><a id="line.945">    try {</a>
+<span class="sourceLineNo">946</span><a id="line.946">      class1 = Class.forName(type1.replace('/', '.'), false, classLoader);</a>
+<span class="sourceLineNo">947</span><a id="line.947">    } catch (Exception e) {</a>
+<span class="sourceLineNo">948</span><a id="line.948">      throw new TypeNotPresentException(type1, e);</a>
+<span class="sourceLineNo">949</span><a id="line.949">    }</a>
+<span class="sourceLineNo">950</span><a id="line.950">    Class&lt;?&gt; class2;</a>
+<span class="sourceLineNo">951</span><a id="line.951">    try {</a>
+<span class="sourceLineNo">952</span><a id="line.952">      class2 = Class.forName(type2.replace('/', '.'), false, classLoader);</a>
+<span class="sourceLineNo">953</span><a id="line.953">    } catch (Exception e) {</a>
+<span class="sourceLineNo">954</span><a id="line.954">      throw new TypeNotPresentException(type2, e);</a>
+<span class="sourceLineNo">955</span><a id="line.955">    }</a>
+<span class="sourceLineNo">956</span><a id="line.956">    if (class1.isAssignableFrom(class2)) {</a>
+<span class="sourceLineNo">957</span><a id="line.957">      return type1;</a>
+<span class="sourceLineNo">958</span><a id="line.958">    }</a>
+<span class="sourceLineNo">959</span><a id="line.959">    if (class2.isAssignableFrom(class1)) {</a>
+<span class="sourceLineNo">960</span><a id="line.960">      return type2;</a>
+<span class="sourceLineNo">961</span><a id="line.961">    }</a>
+<span class="sourceLineNo">962</span><a id="line.962">    if (class1.isInterface() || class2.isInterface()) {</a>
+<span class="sourceLineNo">963</span><a id="line.963">      return "java/lang/Object";</a>
+<span class="sourceLineNo">964</span><a id="line.964">    } else {</a>
+<span class="sourceLineNo">965</span><a id="line.965">      do {</a>
+<span class="sourceLineNo">966</span><a id="line.966">        class1 = class1.getSuperclass();</a>
+<span class="sourceLineNo">967</span><a id="line.967">      } while (!class1.isAssignableFrom(class2));</a>
+<span class="sourceLineNo">968</span><a id="line.968">      return class1.getName().replace('.', '/');</a>
+<span class="sourceLineNo">969</span><a id="line.969">    }</a>
+<span class="sourceLineNo">970</span><a id="line.970">  }</a>
+<span class="sourceLineNo">971</span><a id="line.971">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

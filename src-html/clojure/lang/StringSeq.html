@@ -1,0 +1,128 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">/* rich Dec 6, 2007 */</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">package clojure.lang;</a>
+<span class="sourceLineNo">014</span><a id="line.14"></a>
+<span class="sourceLineNo">015</span><a id="line.15">public class StringSeq extends ASeq implements IndexedSeq{</a>
+<span class="sourceLineNo">016</span><a id="line.16">public final CharSequence s;</a>
+<span class="sourceLineNo">017</span><a id="line.17">public final int i;</a>
+<span class="sourceLineNo">018</span><a id="line.18"></a>
+<span class="sourceLineNo">019</span><a id="line.19">static public StringSeq create(CharSequence s){</a>
+<span class="sourceLineNo">020</span><a id="line.20">        if(s.length() == 0)</a>
+<span class="sourceLineNo">021</span><a id="line.21">                return null;</a>
+<span class="sourceLineNo">022</span><a id="line.22">        return new StringSeq(null, s, 0);</a>
+<span class="sourceLineNo">023</span><a id="line.23">}</a>
+<span class="sourceLineNo">024</span><a id="line.24"></a>
+<span class="sourceLineNo">025</span><a id="line.25">StringSeq(IPersistentMap meta, CharSequence s, int i){</a>
+<span class="sourceLineNo">026</span><a id="line.26">        super(meta);</a>
+<span class="sourceLineNo">027</span><a id="line.27">        this.s = s;</a>
+<span class="sourceLineNo">028</span><a id="line.28">        this.i = i;</a>
+<span class="sourceLineNo">029</span><a id="line.29">}</a>
+<span class="sourceLineNo">030</span><a id="line.30"></a>
+<span class="sourceLineNo">031</span><a id="line.31">public Obj withMeta(IPersistentMap meta){</a>
+<span class="sourceLineNo">032</span><a id="line.32">        if(meta == meta())</a>
+<span class="sourceLineNo">033</span><a id="line.33">                return this;</a>
+<span class="sourceLineNo">034</span><a id="line.34">        return new StringSeq(meta, s, i);</a>
+<span class="sourceLineNo">035</span><a id="line.35">}</a>
+<span class="sourceLineNo">036</span><a id="line.36"></a>
+<span class="sourceLineNo">037</span><a id="line.37">public Object first(){</a>
+<span class="sourceLineNo">038</span><a id="line.38">        return Character.valueOf(s.charAt(i));</a>
+<span class="sourceLineNo">039</span><a id="line.39">}</a>
+<span class="sourceLineNo">040</span><a id="line.40"></a>
+<span class="sourceLineNo">041</span><a id="line.41">public ISeq next(){</a>
+<span class="sourceLineNo">042</span><a id="line.42">        if(i + 1 &lt; s.length())</a>
+<span class="sourceLineNo">043</span><a id="line.43">                return new StringSeq(_meta, s, i + 1);</a>
+<span class="sourceLineNo">044</span><a id="line.44">        return null;</a>
+<span class="sourceLineNo">045</span><a id="line.45">}</a>
+<span class="sourceLineNo">046</span><a id="line.46"></a>
+<span class="sourceLineNo">047</span><a id="line.47">public int index(){</a>
+<span class="sourceLineNo">048</span><a id="line.48">        return i;</a>
+<span class="sourceLineNo">049</span><a id="line.49">}</a>
+<span class="sourceLineNo">050</span><a id="line.50"></a>
+<span class="sourceLineNo">051</span><a id="line.51">public int count(){</a>
+<span class="sourceLineNo">052</span><a id="line.52">        return s.length() - i;</a>
+<span class="sourceLineNo">053</span><a id="line.53">}</a>
+<span class="sourceLineNo">054</span><a id="line.54">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

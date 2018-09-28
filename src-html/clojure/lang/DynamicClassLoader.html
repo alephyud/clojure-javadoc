@@ -1,0 +1,181 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">/* rich Aug 21, 2007 */</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">package clojure.lang;</a>
+<span class="sourceLineNo">014</span><a id="line.14"></a>
+<span class="sourceLineNo">015</span><a id="line.15">import java.lang.ref.Reference;</a>
+<span class="sourceLineNo">016</span><a id="line.16">import java.util.HashMap;</a>
+<span class="sourceLineNo">017</span><a id="line.17">import java.util.Map;</a>
+<span class="sourceLineNo">018</span><a id="line.18">import java.util.concurrent.ConcurrentHashMap;</a>
+<span class="sourceLineNo">019</span><a id="line.19">import java.net.URLClassLoader;</a>
+<span class="sourceLineNo">020</span><a id="line.20">import java.net.URL;</a>
+<span class="sourceLineNo">021</span><a id="line.21">import java.lang.ref.ReferenceQueue;</a>
+<span class="sourceLineNo">022</span><a id="line.22">import java.lang.ref.SoftReference;</a>
+<span class="sourceLineNo">023</span><a id="line.23"></a>
+<span class="sourceLineNo">024</span><a id="line.24">public class DynamicClassLoader extends URLClassLoader{</a>
+<span class="sourceLineNo">025</span><a id="line.25">HashMap&lt;Integer, Object[]&gt; constantVals = new HashMap&lt;Integer, Object[]&gt;();</a>
+<span class="sourceLineNo">026</span><a id="line.26">static ConcurrentHashMap&lt;String, Reference&lt;Class&gt;&gt;classCache =</a>
+<span class="sourceLineNo">027</span><a id="line.27">        new ConcurrentHashMap&lt;String, Reference&lt;Class&gt; &gt;();</a>
+<span class="sourceLineNo">028</span><a id="line.28"></a>
+<span class="sourceLineNo">029</span><a id="line.29">static final URL[] EMPTY_URLS = new URL[]{};</a>
+<span class="sourceLineNo">030</span><a id="line.30"></a>
+<span class="sourceLineNo">031</span><a id="line.31">static final ReferenceQueue rq = new ReferenceQueue();</a>
+<span class="sourceLineNo">032</span><a id="line.32"></a>
+<span class="sourceLineNo">033</span><a id="line.33">public DynamicClassLoader(){</a>
+<span class="sourceLineNo">034</span><a id="line.34">    //pseudo test in lieu of hasContextClassLoader()</a>
+<span class="sourceLineNo">035</span><a id="line.35">        super(EMPTY_URLS,(Thread.currentThread().getContextClassLoader() == null ||</a>
+<span class="sourceLineNo">036</span><a id="line.36">                Thread.currentThread().getContextClassLoader() == ClassLoader.getSystemClassLoader())?</a>
+<span class="sourceLineNo">037</span><a id="line.37">                Compiler.class.getClassLoader():Thread.currentThread().getContextClassLoader());</a>
+<span class="sourceLineNo">038</span><a id="line.38">}</a>
+<span class="sourceLineNo">039</span><a id="line.39"></a>
+<span class="sourceLineNo">040</span><a id="line.40">public DynamicClassLoader(ClassLoader parent){</a>
+<span class="sourceLineNo">041</span><a id="line.41">        super(EMPTY_URLS,parent);</a>
+<span class="sourceLineNo">042</span><a id="line.42">}</a>
+<span class="sourceLineNo">043</span><a id="line.43"></a>
+<span class="sourceLineNo">044</span><a id="line.44">void installPackage(String className) {</a>
+<span class="sourceLineNo">045</span><a id="line.45">        int offset = className.lastIndexOf('.');</a>
+<span class="sourceLineNo">046</span><a id="line.46">        if(offset != -1)</a>
+<span class="sourceLineNo">047</span><a id="line.47">                {</a>
+<span class="sourceLineNo">048</span><a id="line.48">                String pkgname = className.substring(0, offset);</a>
+<span class="sourceLineNo">049</span><a id="line.49">                if (getPackage(pkgname) == null)</a>
+<span class="sourceLineNo">050</span><a id="line.50">                        definePackage(pkgname, null, null, null, null, null, null, null);</a>
+<span class="sourceLineNo">051</span><a id="line.51">                }</a>
+<span class="sourceLineNo">052</span><a id="line.52">}</a>
+<span class="sourceLineNo">053</span><a id="line.53"></a>
+<span class="sourceLineNo">054</span><a id="line.54">public Class defineClass(String name, byte[] bytes, Object srcForm){</a>
+<span class="sourceLineNo">055</span><a id="line.55">        installPackage(name);</a>
+<span class="sourceLineNo">056</span><a id="line.56">        Util.clearCache(rq, classCache);</a>
+<span class="sourceLineNo">057</span><a id="line.57">        Class c = defineClass(name, bytes, 0, bytes.length);</a>
+<span class="sourceLineNo">058</span><a id="line.58">    classCache.put(name, new SoftReference(c,rq));</a>
+<span class="sourceLineNo">059</span><a id="line.59">    return c;</a>
+<span class="sourceLineNo">060</span><a id="line.60">}</a>
+<span class="sourceLineNo">061</span><a id="line.61"></a>
+<span class="sourceLineNo">062</span><a id="line.62">static Class&lt;?&gt; findInMemoryClass(String name) {</a>
+<span class="sourceLineNo">063</span><a id="line.63">    Reference&lt;Class&gt; cr = classCache.get(name);</a>
+<span class="sourceLineNo">064</span><a id="line.64">        if(cr != null)</a>
+<span class="sourceLineNo">065</span><a id="line.65">                {</a>
+<span class="sourceLineNo">066</span><a id="line.66">                Class c = cr.get();</a>
+<span class="sourceLineNo">067</span><a id="line.67">        if(c != null)</a>
+<span class="sourceLineNo">068</span><a id="line.68">            return c;</a>
+<span class="sourceLineNo">069</span><a id="line.69">                else</a>
+<span class="sourceLineNo">070</span><a id="line.70">                classCache.remove(name, cr);</a>
+<span class="sourceLineNo">071</span><a id="line.71">                }</a>
+<span class="sourceLineNo">072</span><a id="line.72">        return null;</a>
+<span class="sourceLineNo">073</span><a id="line.73">}</a>
+<span class="sourceLineNo">074</span><a id="line.74"></a>
+<span class="sourceLineNo">075</span><a id="line.75">protected Class&lt;?&gt;findClass(String name) throws ClassNotFoundException {</a>
+<span class="sourceLineNo">076</span><a id="line.76">        Class c = findInMemoryClass(name);</a>
+<span class="sourceLineNo">077</span><a id="line.77">        if (c != null)</a>
+<span class="sourceLineNo">078</span><a id="line.78">                return c;</a>
+<span class="sourceLineNo">079</span><a id="line.79">        else</a>
+<span class="sourceLineNo">080</span><a id="line.80">                return super.findClass(name);</a>
+<span class="sourceLineNo">081</span><a id="line.81">}</a>
+<span class="sourceLineNo">082</span><a id="line.82"></a>
+<span class="sourceLineNo">083</span><a id="line.83">protected synchronized Class&lt;?&gt; loadClass(String name, boolean resolve) throws ClassNotFoundException {</a>
+<span class="sourceLineNo">084</span><a id="line.84">        Class c = findLoadedClass(name);</a>
+<span class="sourceLineNo">085</span><a id="line.85">        if (c == null) {</a>
+<span class="sourceLineNo">086</span><a id="line.86">                c = findInMemoryClass(name);</a>
+<span class="sourceLineNo">087</span><a id="line.87">                if (c == null)</a>
+<span class="sourceLineNo">088</span><a id="line.88">                        c = super.loadClass(name, false);</a>
+<span class="sourceLineNo">089</span><a id="line.89">    }</a>
+<span class="sourceLineNo">090</span><a id="line.90">        if (resolve)</a>
+<span class="sourceLineNo">091</span><a id="line.91">                resolveClass(c);</a>
+<span class="sourceLineNo">092</span><a id="line.92">        return c;</a>
+<span class="sourceLineNo">093</span><a id="line.93">}</a>
+<span class="sourceLineNo">094</span><a id="line.94"></a>
+<span class="sourceLineNo">095</span><a id="line.95">public void registerConstants(int id, Object[] val){</a>
+<span class="sourceLineNo">096</span><a id="line.96">        constantVals.put(id, val);</a>
+<span class="sourceLineNo">097</span><a id="line.97">}</a>
+<span class="sourceLineNo">098</span><a id="line.98"></a>
+<span class="sourceLineNo">099</span><a id="line.99">public Object[] getConstants(int id){</a>
+<span class="sourceLineNo">100</span><a id="line.100">        return constantVals.get(id);</a>
+<span class="sourceLineNo">101</span><a id="line.101">}</a>
+<span class="sourceLineNo">102</span><a id="line.102"></a>
+<span class="sourceLineNo">103</span><a id="line.103">public void addURL(URL url){</a>
+<span class="sourceLineNo">104</span><a id="line.104">        super.addURL(url);</a>
+<span class="sourceLineNo">105</span><a id="line.105">}</a>
+<span class="sourceLineNo">106</span><a id="line.106"></a>
+<span class="sourceLineNo">107</span><a id="line.107">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

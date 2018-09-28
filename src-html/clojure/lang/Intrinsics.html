@@ -1,0 +1,210 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">/* rich 9/5/11 */</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">package clojure.lang;</a>
+<span class="sourceLineNo">014</span><a id="line.14"></a>
+<span class="sourceLineNo">015</span><a id="line.15">import clojure.asm.Opcodes;</a>
+<span class="sourceLineNo">016</span><a id="line.16"></a>
+<span class="sourceLineNo">017</span><a id="line.17">public class Intrinsics implements Opcodes{</a>
+<span class="sourceLineNo">018</span><a id="line.18">private static Object[] oa(Object... arr){</a>
+<span class="sourceLineNo">019</span><a id="line.19">        return arr;</a>
+<span class="sourceLineNo">020</span><a id="line.20">}</a>
+<span class="sourceLineNo">021</span><a id="line.21"></a>
+<span class="sourceLineNo">022</span><a id="line.22">static IPersistentMap ops = RT.map(</a>
+<span class="sourceLineNo">023</span><a id="line.23"> "public static double clojure.lang.Numbers.add(double,double)", DADD,</a>
+<span class="sourceLineNo">024</span><a id="line.24"> "public static long clojure.lang.Numbers.and(long,long)", LAND,</a>
+<span class="sourceLineNo">025</span><a id="line.25"> "public static long clojure.lang.Numbers.or(long,long)", LOR,</a>
+<span class="sourceLineNo">026</span><a id="line.26"> "public static long clojure.lang.Numbers.xor(long,long)", LXOR,</a>
+<span class="sourceLineNo">027</span><a id="line.27"> "public static double clojure.lang.Numbers.multiply(double,double)", DMUL,</a>
+<span class="sourceLineNo">028</span><a id="line.28"> "public static double clojure.lang.Numbers.divide(double,double)", DDIV,</a>
+<span class="sourceLineNo">029</span><a id="line.29"> "public static long clojure.lang.Numbers.remainder(long,long)", LREM,</a>
+<span class="sourceLineNo">030</span><a id="line.30"> "public static long clojure.lang.Numbers.shiftLeft(long,long)", oa(L2I, LSHL),</a>
+<span class="sourceLineNo">031</span><a id="line.31"> "public static long clojure.lang.Numbers.shiftRight(long,long)", oa(L2I, LSHR),</a>
+<span class="sourceLineNo">032</span><a id="line.32"> "public static long clojure.lang.Numbers.unsignedShiftRight(long,long)", oa(L2I, LUSHR),</a>
+<span class="sourceLineNo">033</span><a id="line.33"> "public static double clojure.lang.Numbers.minus(double)", DNEG,</a>
+<span class="sourceLineNo">034</span><a id="line.34"> "public static double clojure.lang.Numbers.minus(double,double)", DSUB,</a>
+<span class="sourceLineNo">035</span><a id="line.35"> "public static double clojure.lang.Numbers.inc(double)", oa(DCONST_1, DADD),</a>
+<span class="sourceLineNo">036</span><a id="line.36"> "public static double clojure.lang.Numbers.dec(double)", oa(DCONST_1, DSUB),</a>
+<span class="sourceLineNo">037</span><a id="line.37"> "public static long clojure.lang.Numbers.quotient(long,long)", LDIV,</a>
+<span class="sourceLineNo">038</span><a id="line.38"> "public static int clojure.lang.Numbers.shiftLeftInt(int,int)", ISHL,</a>
+<span class="sourceLineNo">039</span><a id="line.39"> "public static int clojure.lang.Numbers.shiftRightInt(int,int)", ISHR,</a>
+<span class="sourceLineNo">040</span><a id="line.40"> "public static int clojure.lang.Numbers.unsignedShiftRightInt(int,int)", IUSHR,</a>
+<span class="sourceLineNo">041</span><a id="line.41"> "public static int clojure.lang.Numbers.unchecked_int_add(int,int)", IADD,</a>
+<span class="sourceLineNo">042</span><a id="line.42"> "public static int clojure.lang.Numbers.unchecked_int_subtract(int,int)", ISUB,</a>
+<span class="sourceLineNo">043</span><a id="line.43"> "public static int clojure.lang.Numbers.unchecked_int_negate(int)", INEG,</a>
+<span class="sourceLineNo">044</span><a id="line.44"> "public static int clojure.lang.Numbers.unchecked_int_inc(int)", oa(ICONST_1, IADD),</a>
+<span class="sourceLineNo">045</span><a id="line.45"> "public static int clojure.lang.Numbers.unchecked_int_dec(int)", oa(ICONST_1, ISUB),</a>
+<span class="sourceLineNo">046</span><a id="line.46"> "public static int clojure.lang.Numbers.unchecked_int_multiply(int,int)", IMUL,</a>
+<span class="sourceLineNo">047</span><a id="line.47"> "public static int clojure.lang.Numbers.unchecked_int_divide(int,int)", IDIV,</a>
+<span class="sourceLineNo">048</span><a id="line.48"> "public static int clojure.lang.Numbers.unchecked_int_remainder(int,int)", IREM,</a>
+<span class="sourceLineNo">049</span><a id="line.49"> "public static long clojure.lang.Numbers.unchecked_add(long,long)", LADD,</a>
+<span class="sourceLineNo">050</span><a id="line.50"> "public static double clojure.lang.Numbers.unchecked_add(double,double)", DADD,</a>
+<span class="sourceLineNo">051</span><a id="line.51"> "public static long clojure.lang.Numbers.unchecked_minus(long)", LNEG,</a>
+<span class="sourceLineNo">052</span><a id="line.52"> "public static double clojure.lang.Numbers.unchecked_minus(double)", DNEG,</a>
+<span class="sourceLineNo">053</span><a id="line.53"> "public static double clojure.lang.Numbers.unchecked_minus(double,double)", DSUB,</a>
+<span class="sourceLineNo">054</span><a id="line.54"> "public static long clojure.lang.Numbers.unchecked_minus(long,long)", LSUB,</a>
+<span class="sourceLineNo">055</span><a id="line.55"> "public static long clojure.lang.Numbers.unchecked_multiply(long,long)", LMUL,</a>
+<span class="sourceLineNo">056</span><a id="line.56"> "public static double clojure.lang.Numbers.unchecked_multiply(double,double)", DMUL,</a>
+<span class="sourceLineNo">057</span><a id="line.57"> "public static double clojure.lang.Numbers.unchecked_inc(double)", oa(DCONST_1, DADD),</a>
+<span class="sourceLineNo">058</span><a id="line.58"> "public static long clojure.lang.Numbers.unchecked_inc(long)", oa(LCONST_1, LADD),</a>
+<span class="sourceLineNo">059</span><a id="line.59"> "public static double clojure.lang.Numbers.unchecked_dec(double)", oa(DCONST_1, DSUB),</a>
+<span class="sourceLineNo">060</span><a id="line.60"> "public static long clojure.lang.Numbers.unchecked_dec(long)", oa(LCONST_1, LSUB),</a>
+<span class="sourceLineNo">061</span><a id="line.61"></a>
+<span class="sourceLineNo">062</span><a id="line.62"></a>
+<span class="sourceLineNo">063</span><a id="line.63">  "public static short clojure.lang.RT.aget(short[],int)", SALOAD,</a>
+<span class="sourceLineNo">064</span><a id="line.64">  "public static float clojure.lang.RT.aget(float[],int)", FALOAD,</a>
+<span class="sourceLineNo">065</span><a id="line.65">  "public static double clojure.lang.RT.aget(double[],int)", DALOAD,</a>
+<span class="sourceLineNo">066</span><a id="line.66">  "public static int clojure.lang.RT.aget(int[],int)", IALOAD,</a>
+<span class="sourceLineNo">067</span><a id="line.67">  "public static long clojure.lang.RT.aget(long[],int)", LALOAD,</a>
+<span class="sourceLineNo">068</span><a id="line.68">  "public static char clojure.lang.RT.aget(char[],int)", CALOAD,</a>
+<span class="sourceLineNo">069</span><a id="line.69">  "public static byte clojure.lang.RT.aget(byte[],int)", BALOAD,</a>
+<span class="sourceLineNo">070</span><a id="line.70">  "public static boolean clojure.lang.RT.aget(boolean[],int)", BALOAD,</a>
+<span class="sourceLineNo">071</span><a id="line.71">  "public static java.lang.Object clojure.lang.RT.aget(java.lang.Object[],int)", AALOAD,</a>
+<span class="sourceLineNo">072</span><a id="line.72">  "public static int clojure.lang.RT.alength(int[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">073</span><a id="line.73">  "public static int clojure.lang.RT.alength(long[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">074</span><a id="line.74">  "public static int clojure.lang.RT.alength(char[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">075</span><a id="line.75">  "public static int clojure.lang.RT.alength(java.lang.Object[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">076</span><a id="line.76">  "public static int clojure.lang.RT.alength(byte[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">077</span><a id="line.77">  "public static int clojure.lang.RT.alength(float[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">078</span><a id="line.78">  "public static int clojure.lang.RT.alength(short[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">079</span><a id="line.79">  "public static int clojure.lang.RT.alength(boolean[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">080</span><a id="line.80">  "public static int clojure.lang.RT.alength(double[])", ARRAYLENGTH,</a>
+<span class="sourceLineNo">081</span><a id="line.81"></a>
+<span class="sourceLineNo">082</span><a id="line.82"> "public static double clojure.lang.RT.doubleCast(long)", L2D,</a>
+<span class="sourceLineNo">083</span><a id="line.83"> "public static double clojure.lang.RT.doubleCast(double)", NOP,</a>
+<span class="sourceLineNo">084</span><a id="line.84"> "public static double clojure.lang.RT.doubleCast(float)", F2D,</a>
+<span class="sourceLineNo">085</span><a id="line.85"> "public static double clojure.lang.RT.doubleCast(int)", I2D,</a>
+<span class="sourceLineNo">086</span><a id="line.86"> "public static double clojure.lang.RT.doubleCast(short)", I2D,</a>
+<span class="sourceLineNo">087</span><a id="line.87"> "public static double clojure.lang.RT.doubleCast(byte)", I2D,</a>
+<span class="sourceLineNo">088</span><a id="line.88"> "public static double clojure.lang.RT.uncheckedDoubleCast(double)", NOP,</a>
+<span class="sourceLineNo">089</span><a id="line.89"> "public static double clojure.lang.RT.uncheckedDoubleCast(float)", F2D,</a>
+<span class="sourceLineNo">090</span><a id="line.90"> "public static double clojure.lang.RT.uncheckedDoubleCast(long)", L2D,</a>
+<span class="sourceLineNo">091</span><a id="line.91"> "public static double clojure.lang.RT.uncheckedDoubleCast(int)", I2D,</a>
+<span class="sourceLineNo">092</span><a id="line.92"> "public static double clojure.lang.RT.uncheckedDoubleCast(short)", I2D,</a>
+<span class="sourceLineNo">093</span><a id="line.93"> "public static double clojure.lang.RT.uncheckedDoubleCast(byte)", I2D,</a>
+<span class="sourceLineNo">094</span><a id="line.94"> "public static long clojure.lang.RT.longCast(long)", NOP,</a>
+<span class="sourceLineNo">095</span><a id="line.95"> "public static long clojure.lang.RT.longCast(short)", I2L,</a>
+<span class="sourceLineNo">096</span><a id="line.96"> "public static long clojure.lang.RT.longCast(byte)", I2L,</a>
+<span class="sourceLineNo">097</span><a id="line.97"> "public static long clojure.lang.RT.longCast(int)", I2L,</a>
+<span class="sourceLineNo">098</span><a id="line.98">  "public static int clojure.lang.RT.uncheckedIntCast(long)", L2I,</a>
+<span class="sourceLineNo">099</span><a id="line.99">  "public static int clojure.lang.RT.uncheckedIntCast(double)", D2I,</a>
+<span class="sourceLineNo">100</span><a id="line.100">  "public static int clojure.lang.RT.uncheckedIntCast(byte)", NOP,</a>
+<span class="sourceLineNo">101</span><a id="line.101">  "public static int clojure.lang.RT.uncheckedIntCast(short)", NOP,</a>
+<span class="sourceLineNo">102</span><a id="line.102">  "public static int clojure.lang.RT.uncheckedIntCast(char)", NOP,</a>
+<span class="sourceLineNo">103</span><a id="line.103">  "public static int clojure.lang.RT.uncheckedIntCast(int)", NOP,</a>
+<span class="sourceLineNo">104</span><a id="line.104">  "public static int clojure.lang.RT.uncheckedIntCast(float)", F2I,</a>
+<span class="sourceLineNo">105</span><a id="line.105">  "public static long clojure.lang.RT.uncheckedLongCast(short)", I2L,</a>
+<span class="sourceLineNo">106</span><a id="line.106">  "public static long clojure.lang.RT.uncheckedLongCast(float)", F2L,</a>
+<span class="sourceLineNo">107</span><a id="line.107">  "public static long clojure.lang.RT.uncheckedLongCast(double)", D2L,</a>
+<span class="sourceLineNo">108</span><a id="line.108">  "public static long clojure.lang.RT.uncheckedLongCast(byte)", I2L,</a>
+<span class="sourceLineNo">109</span><a id="line.109">  "public static long clojure.lang.RT.uncheckedLongCast(long)", NOP,</a>
+<span class="sourceLineNo">110</span><a id="line.110">  "public static long clojure.lang.RT.uncheckedLongCast(int)", I2L</a>
+<span class="sourceLineNo">111</span><a id="line.111">);</a>
+<span class="sourceLineNo">112</span><a id="line.112"></a>
+<span class="sourceLineNo">113</span><a id="line.113">//map to instructions terminated with comparator for branch to false</a>
+<span class="sourceLineNo">114</span><a id="line.114">static IPersistentMap preds = RT.map(</a>
+<span class="sourceLineNo">115</span><a id="line.115">  "public static boolean clojure.lang.Numbers.lt(double,double)", oa(DCMPG, IFGE),</a>
+<span class="sourceLineNo">116</span><a id="line.116">  "public static boolean clojure.lang.Numbers.lt(long,long)", oa(LCMP, IFGE),</a>
+<span class="sourceLineNo">117</span><a id="line.117">  "public static boolean clojure.lang.Numbers.equiv(double,double)", oa(DCMPL, IFNE),</a>
+<span class="sourceLineNo">118</span><a id="line.118">  "public static boolean clojure.lang.Numbers.equiv(long,long)", oa(LCMP, IFNE),</a>
+<span class="sourceLineNo">119</span><a id="line.119">  "public static boolean clojure.lang.Numbers.lte(double,double)", oa(DCMPG, IFGT),</a>
+<span class="sourceLineNo">120</span><a id="line.120">  "public static boolean clojure.lang.Numbers.lte(long,long)", oa(LCMP, IFGT),</a>
+<span class="sourceLineNo">121</span><a id="line.121">  "public static boolean clojure.lang.Numbers.gt(long,long)", oa(LCMP, IFLE),</a>
+<span class="sourceLineNo">122</span><a id="line.122">  "public static boolean clojure.lang.Numbers.gt(double,double)", oa(DCMPL, IFLE),</a>
+<span class="sourceLineNo">123</span><a id="line.123">  "public static boolean clojure.lang.Numbers.gte(long,long)", oa(LCMP, IFLT),</a>
+<span class="sourceLineNo">124</span><a id="line.124">  "public static boolean clojure.lang.Numbers.gte(double,double)", oa(DCMPL, IFLT),</a>
+<span class="sourceLineNo">125</span><a id="line.125">  "public static boolean clojure.lang.Util.equiv(long,long)", oa(LCMP, IFNE),</a>
+<span class="sourceLineNo">126</span><a id="line.126">  "public static boolean clojure.lang.Util.equiv(boolean,boolean)", oa(IF_ICMPNE),</a>
+<span class="sourceLineNo">127</span><a id="line.127">  "public static boolean clojure.lang.Util.equiv(double,double)", oa(DCMPL, IFNE),</a>
+<span class="sourceLineNo">128</span><a id="line.128"></a>
+<span class="sourceLineNo">129</span><a id="line.129">  "public static boolean clojure.lang.Numbers.isZero(double)", oa(DCONST_0, DCMPL, IFNE),</a>
+<span class="sourceLineNo">130</span><a id="line.130">  "public static boolean clojure.lang.Numbers.isZero(long)", oa(LCONST_0, LCMP, IFNE),</a>
+<span class="sourceLineNo">131</span><a id="line.131">  "public static boolean clojure.lang.Numbers.isPos(long)", oa(LCONST_0, LCMP, IFLE),</a>
+<span class="sourceLineNo">132</span><a id="line.132">  "public static boolean clojure.lang.Numbers.isPos(double)", oa(DCONST_0, DCMPL, IFLE),</a>
+<span class="sourceLineNo">133</span><a id="line.133">  "public static boolean clojure.lang.Numbers.isNeg(long)", oa(LCONST_0, LCMP, IFGE),</a>
+<span class="sourceLineNo">134</span><a id="line.134">  "public static boolean clojure.lang.Numbers.isNeg(double)", oa(DCONST_0, DCMPG, IFGE)</a>
+<span class="sourceLineNo">135</span><a id="line.135">);</a>
+<span class="sourceLineNo">136</span><a id="line.136">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

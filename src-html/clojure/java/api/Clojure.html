@@ -1,0 +1,174 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey and Contributors. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">package clojure.java.api;</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">import clojure.lang.IFn;</a>
+<span class="sourceLineNo">014</span><a id="line.14">import clojure.lang.Symbol;</a>
+<span class="sourceLineNo">015</span><a id="line.15">import clojure.lang.Var;</a>
+<span class="sourceLineNo">016</span><a id="line.16"></a>
+<span class="sourceLineNo">017</span><a id="line.17">/**</a>
+<span class="sourceLineNo">018</span><a id="line.18"> * &lt;p&gt;The Clojure class provides a minimal interface to bootstrap Clojure access</a>
+<span class="sourceLineNo">019</span><a id="line.19"> * from other JVM languages. It provides:&lt;/p&gt;</a>
+<span class="sourceLineNo">020</span><a id="line.20"> *</a>
+<span class="sourceLineNo">021</span><a id="line.21"> * &lt;ol&gt;</a>
+<span class="sourceLineNo">022</span><a id="line.22"> * &lt;li&gt;The ability to use Clojure's namespaces to locate an arbitrary</a>
+<span class="sourceLineNo">023</span><a id="line.23"> * &lt;a href="http://clojure.org/vars"&gt;var&lt;/a&gt;, returning the</a>
+<span class="sourceLineNo">024</span><a id="line.24"> * var's {@link clojure.lang.IFn} interface.&lt;/li&gt;</a>
+<span class="sourceLineNo">025</span><a id="line.25"> * &lt;li&gt;A convenience method &lt;code&gt;read&lt;/code&gt; for reading data using</a>
+<span class="sourceLineNo">026</span><a id="line.26"> * Clojure's edn reader&lt;/li&gt;</a>
+<span class="sourceLineNo">027</span><a id="line.27"> * &lt;/ol&gt;</a>
+<span class="sourceLineNo">028</span><a id="line.28"> *</a>
+<span class="sourceLineNo">029</span><a id="line.29"> * &lt;p&gt;To lookup and call a Clojure function:&lt;/p&gt;</a>
+<span class="sourceLineNo">030</span><a id="line.30"> *</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * &lt;pre&gt;</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * IFn plus = Clojure.var("clojure.core", "+");</a>
+<span class="sourceLineNo">033</span><a id="line.33"> * plus.invoke(1, 2);&lt;/pre&gt;</a>
+<span class="sourceLineNo">034</span><a id="line.34"> *</a>
+<span class="sourceLineNo">035</span><a id="line.35"> * &lt;p&gt;Functions in &lt;code&gt;clojure.core&lt;/code&gt; are automatically loaded. Other</a>
+<span class="sourceLineNo">036</span><a id="line.36"> * namespaces can be loaded via &lt;code&gt;require&lt;/code&gt;:&lt;/p&gt;</a>
+<span class="sourceLineNo">037</span><a id="line.37"> *</a>
+<span class="sourceLineNo">038</span><a id="line.38"> * &lt;pre&gt;</a>
+<span class="sourceLineNo">039</span><a id="line.39"> * IFn require = Clojure.var("clojure.core", "require");</a>
+<span class="sourceLineNo">040</span><a id="line.40"> * require.invoke(Clojure.read("clojure.set"));&lt;/pre&gt;</a>
+<span class="sourceLineNo">041</span><a id="line.41"> *</a>
+<span class="sourceLineNo">042</span><a id="line.42"> * &lt;p&gt;&lt;code&gt;IFn&lt;/code&gt;s can be passed to higher order functions, e.g. the</a>
+<span class="sourceLineNo">043</span><a id="line.43"> * example below passes &lt;code&gt;plus&lt;/code&gt; to &lt;code&gt;read&lt;/code&gt;:&lt;/p&gt;</a>
+<span class="sourceLineNo">044</span><a id="line.44"> *</a>
+<span class="sourceLineNo">045</span><a id="line.45"> * &lt;pre&gt;</a>
+<span class="sourceLineNo">046</span><a id="line.46"> * IFn map = Clojure.var("clojure.core", "map");</a>
+<span class="sourceLineNo">047</span><a id="line.47"> * IFn inc = Clojure.var("clojure.core", "inc");</a>
+<span class="sourceLineNo">048</span><a id="line.48"> * map.invoke(inc, Clojure.read("[1 2 3]"));&lt;/pre&gt;</a>
+<span class="sourceLineNo">049</span><a id="line.49"> */</a>
+<span class="sourceLineNo">050</span><a id="line.50">public class Clojure {</a>
+<span class="sourceLineNo">051</span><a id="line.51">    private Clojure() {}</a>
+<span class="sourceLineNo">052</span><a id="line.52"></a>
+<span class="sourceLineNo">053</span><a id="line.53">    private static Symbol asSym(Object o) {</a>
+<span class="sourceLineNo">054</span><a id="line.54">        Symbol s;</a>
+<span class="sourceLineNo">055</span><a id="line.55">        if (o instanceof String) {</a>
+<span class="sourceLineNo">056</span><a id="line.56">            s = Symbol.intern((String) o);</a>
+<span class="sourceLineNo">057</span><a id="line.57">        }  else {</a>
+<span class="sourceLineNo">058</span><a id="line.58">            s = (Symbol) o;</a>
+<span class="sourceLineNo">059</span><a id="line.59">        }</a>
+<span class="sourceLineNo">060</span><a id="line.60">        return s;</a>
+<span class="sourceLineNo">061</span><a id="line.61">    }</a>
+<span class="sourceLineNo">062</span><a id="line.62"></a>
+<span class="sourceLineNo">063</span><a id="line.63">    /**</a>
+<span class="sourceLineNo">064</span><a id="line.64">     * Returns the var associated with qualifiedName.</a>
+<span class="sourceLineNo">065</span><a id="line.65">     *</a>
+<span class="sourceLineNo">066</span><a id="line.66">     * @param qualifiedName  a String or clojure.lang.Symbol</a>
+<span class="sourceLineNo">067</span><a id="line.67">     * @return               a clojure.lang.IFn</a>
+<span class="sourceLineNo">068</span><a id="line.68">     */</a>
+<span class="sourceLineNo">069</span><a id="line.69">    public static IFn var(Object qualifiedName) {</a>
+<span class="sourceLineNo">070</span><a id="line.70">        Symbol s = asSym(qualifiedName);</a>
+<span class="sourceLineNo">071</span><a id="line.71">        return var(s.getNamespace(), s.getName());</a>
+<span class="sourceLineNo">072</span><a id="line.72">    }</a>
+<span class="sourceLineNo">073</span><a id="line.73"></a>
+<span class="sourceLineNo">074</span><a id="line.74">    /**</a>
+<span class="sourceLineNo">075</span><a id="line.75">     * Returns an IFn associated with the namespace and name.</a>
+<span class="sourceLineNo">076</span><a id="line.76">     *</a>
+<span class="sourceLineNo">077</span><a id="line.77">     * @param ns        a String or clojure.lang.Symbol</a>
+<span class="sourceLineNo">078</span><a id="line.78">     * @param name      a String or clojure.lang.Symbol</a>
+<span class="sourceLineNo">079</span><a id="line.79">     * @return          a clojure.lang.IFn</a>
+<span class="sourceLineNo">080</span><a id="line.80">     */</a>
+<span class="sourceLineNo">081</span><a id="line.81">    public static IFn var(Object ns, Object name) {</a>
+<span class="sourceLineNo">082</span><a id="line.82">        return Var.intern(asSym(ns), asSym(name));</a>
+<span class="sourceLineNo">083</span><a id="line.83">    }</a>
+<span class="sourceLineNo">084</span><a id="line.84"></a>
+<span class="sourceLineNo">085</span><a id="line.85">    /**</a>
+<span class="sourceLineNo">086</span><a id="line.86">     * Read one object from the String s.  Reads data in the</a>
+<span class="sourceLineNo">087</span><a id="line.87">     * &lt;a href="http://edn-format.org"&gt;edn format&lt;/a&gt;.</a>
+<span class="sourceLineNo">088</span><a id="line.88">     * @param s   a String</a>
+<span class="sourceLineNo">089</span><a id="line.89">     * @return    an Object, or nil.</a>
+<span class="sourceLineNo">090</span><a id="line.90">     */</a>
+<span class="sourceLineNo">091</span><a id="line.91">    public static Object read(String s) {</a>
+<span class="sourceLineNo">092</span><a id="line.92">        return EDN_READ_STRING.invoke(s);</a>
+<span class="sourceLineNo">093</span><a id="line.93">    }</a>
+<span class="sourceLineNo">094</span><a id="line.94"></a>
+<span class="sourceLineNo">095</span><a id="line.95">    static {</a>
+<span class="sourceLineNo">096</span><a id="line.96">        Symbol edn = (Symbol) var("clojure.core", "symbol").invoke("clojure.edn");</a>
+<span class="sourceLineNo">097</span><a id="line.97">        var("clojure.core", "require").invoke(edn);</a>
+<span class="sourceLineNo">098</span><a id="line.98">    }</a>
+<span class="sourceLineNo">099</span><a id="line.99">    private static final IFn EDN_READ_STRING = var("clojure.edn", "read-string");</a>
+<span class="sourceLineNo">100</span><a id="line.100">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

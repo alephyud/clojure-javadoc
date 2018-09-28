@@ -1,0 +1,421 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">// ASM: a very small and fast Java bytecode manipulation framework</a>
+<span class="sourceLineNo">002</span><a id="line.2">// Copyright (c) 2000-2011 INRIA, France Telecom</a>
+<span class="sourceLineNo">003</span><a id="line.3">// All rights reserved.</a>
+<span class="sourceLineNo">004</span><a id="line.4">//</a>
+<span class="sourceLineNo">005</span><a id="line.5">// Redistribution and use in source and binary forms, with or without</a>
+<span class="sourceLineNo">006</span><a id="line.6">// modification, are permitted provided that the following conditions</a>
+<span class="sourceLineNo">007</span><a id="line.7">// are met:</a>
+<span class="sourceLineNo">008</span><a id="line.8">// 1. Redistributions of source code must retain the above copyright</a>
+<span class="sourceLineNo">009</span><a id="line.9">//    notice, this list of conditions and the following disclaimer.</a>
+<span class="sourceLineNo">010</span><a id="line.10">// 2. Redistributions in binary form must reproduce the above copyright</a>
+<span class="sourceLineNo">011</span><a id="line.11">//    notice, this list of conditions and the following disclaimer in the</a>
+<span class="sourceLineNo">012</span><a id="line.12">//    documentation and/or other materials provided with the distribution.</a>
+<span class="sourceLineNo">013</span><a id="line.13">// 3. Neither the name of the copyright holders nor the names of its</a>
+<span class="sourceLineNo">014</span><a id="line.14">//    contributors may be used to endorse or promote products derived from</a>
+<span class="sourceLineNo">015</span><a id="line.15">//    this software without specific prior written permission.</a>
+<span class="sourceLineNo">016</span><a id="line.16">//</a>
+<span class="sourceLineNo">017</span><a id="line.17">// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"</a>
+<span class="sourceLineNo">018</span><a id="line.18">// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</a>
+<span class="sourceLineNo">019</span><a id="line.19">// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</a>
+<span class="sourceLineNo">020</span><a id="line.20">// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</a>
+<span class="sourceLineNo">021</span><a id="line.21">// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</a>
+<span class="sourceLineNo">022</span><a id="line.22">// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</a>
+<span class="sourceLineNo">023</span><a id="line.23">// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</a>
+<span class="sourceLineNo">024</span><a id="line.24">// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</a>
+<span class="sourceLineNo">025</span><a id="line.25">// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</a>
+<span class="sourceLineNo">026</span><a id="line.26">// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF</a>
+<span class="sourceLineNo">027</span><a id="line.27">// THE POSSIBILITY OF SUCH DAMAGE.</a>
+<span class="sourceLineNo">028</span><a id="line.28">package clojure.asm;</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">/**</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * The JVM opcodes, access flags and array type codes. This interface does not define all the JVM</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * opcodes because some opcodes are automatically handled. For example, the xLOAD and xSTORE opcodes</a>
+<span class="sourceLineNo">033</span><a id="line.33"> * are automatically replaced by xLOAD_n and xSTORE_n opcodes when possible. The xLOAD_n and</a>
+<span class="sourceLineNo">034</span><a id="line.34"> * xSTORE_n opcodes are therefore not defined in this interface. Likewise for LDC, automatically</a>
+<span class="sourceLineNo">035</span><a id="line.35"> * replaced by LDC_W or LDC2_W when necessary, WIDE, GOTO_W and JSR_W.</a>
+<span class="sourceLineNo">036</span><a id="line.36"> *</a>
+<span class="sourceLineNo">037</span><a id="line.37"> * @see &lt;a href="https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-6.html"&gt;JVMS 6&lt;/a&gt;</a>
+<span class="sourceLineNo">038</span><a id="line.38"> * @author Eric Bruneton</a>
+<span class="sourceLineNo">039</span><a id="line.39"> * @author Eugene Kuleshov</a>
+<span class="sourceLineNo">040</span><a id="line.40"> */</a>
+<span class="sourceLineNo">041</span><a id="line.41">public interface Opcodes {</a>
+<span class="sourceLineNo">042</span><a id="line.42"></a>
+<span class="sourceLineNo">043</span><a id="line.43">  // ASM API versions.</a>
+<span class="sourceLineNo">044</span><a id="line.44"></a>
+<span class="sourceLineNo">045</span><a id="line.45">  int ASM4 = 4 &lt;&lt; 16 | 0 &lt;&lt; 8;</a>
+<span class="sourceLineNo">046</span><a id="line.46">  int ASM5 = 5 &lt;&lt; 16 | 0 &lt;&lt; 8;</a>
+<span class="sourceLineNo">047</span><a id="line.47">  int ASM6 = 6 &lt;&lt; 16 | 0 &lt;&lt; 8;</a>
+<span class="sourceLineNo">048</span><a id="line.48"></a>
+<span class="sourceLineNo">049</span><a id="line.49">  /**</a>
+<span class="sourceLineNo">050</span><a id="line.50">   * &lt;b&gt;Experimental, use at your own risk. This field will be renamed when it becomes stable, this</a>
+<span class="sourceLineNo">051</span><a id="line.51">   * will break existing code using it&lt;/b&gt;.</a>
+<span class="sourceLineNo">052</span><a id="line.52">   *</a>
+<span class="sourceLineNo">053</span><a id="line.53">   * @deprecated This API is experimental.</a>
+<span class="sourceLineNo">054</span><a id="line.54">   */</a>
+<span class="sourceLineNo">055</span><a id="line.55">  @Deprecated int ASM7_EXPERIMENTAL = 1 &lt;&lt; 24 | 7 &lt;&lt; 16 | 0 &lt;&lt; 8;</a>
+<span class="sourceLineNo">056</span><a id="line.56"></a>
+<span class="sourceLineNo">057</span><a id="line.57">  // Java ClassFile versions (the minor version is stored in the 16 most</a>
+<span class="sourceLineNo">058</span><a id="line.58">  // significant bits, and the</a>
+<span class="sourceLineNo">059</span><a id="line.59">  // major version in the 16 least significant bits).</a>
+<span class="sourceLineNo">060</span><a id="line.60"></a>
+<span class="sourceLineNo">061</span><a id="line.61">  int V1_1 = 3 &lt;&lt; 16 | 45;</a>
+<span class="sourceLineNo">062</span><a id="line.62">  int V1_2 = 0 &lt;&lt; 16 | 46;</a>
+<span class="sourceLineNo">063</span><a id="line.63">  int V1_3 = 0 &lt;&lt; 16 | 47;</a>
+<span class="sourceLineNo">064</span><a id="line.64">  int V1_4 = 0 &lt;&lt; 16 | 48;</a>
+<span class="sourceLineNo">065</span><a id="line.65">  int V1_5 = 0 &lt;&lt; 16 | 49;</a>
+<span class="sourceLineNo">066</span><a id="line.66">  int V1_6 = 0 &lt;&lt; 16 | 50;</a>
+<span class="sourceLineNo">067</span><a id="line.67">  int V1_7 = 0 &lt;&lt; 16 | 51;</a>
+<span class="sourceLineNo">068</span><a id="line.68">  int V1_8 = 0 &lt;&lt; 16 | 52;</a>
+<span class="sourceLineNo">069</span><a id="line.69">  int V9 = 0 &lt;&lt; 16 | 53;</a>
+<span class="sourceLineNo">070</span><a id="line.70">  int V10 = 0 &lt;&lt; 16 | 54;</a>
+<span class="sourceLineNo">071</span><a id="line.71">  int V11 = 0 &lt;&lt; 16 | 55;</a>
+<span class="sourceLineNo">072</span><a id="line.72"></a>
+<span class="sourceLineNo">073</span><a id="line.73">  /**</a>
+<span class="sourceLineNo">074</span><a id="line.74">   * Version flag indicating that the class is using 'preview' features.</a>
+<span class="sourceLineNo">075</span><a id="line.75">   *</a>
+<span class="sourceLineNo">076</span><a id="line.76">   * &lt;p&gt;{@code version &amp; V_PREVIEW_EXPERIMENTAL == V_PREVIEW_EXPERIMENTAL} tests if a version is</a>
+<span class="sourceLineNo">077</span><a id="line.77">   * flagged with {@code V_PREVIEW_EXPERIMENTAL}.</a>
+<span class="sourceLineNo">078</span><a id="line.78">   *</a>
+<span class="sourceLineNo">079</span><a id="line.79">   * @deprecated This API is experimental.</a>
+<span class="sourceLineNo">080</span><a id="line.80">   */</a>
+<span class="sourceLineNo">081</span><a id="line.81">  @Deprecated int V_PREVIEW_EXPERIMENTAL = 0xFFFF0000;</a>
+<span class="sourceLineNo">082</span><a id="line.82"></a>
+<span class="sourceLineNo">083</span><a id="line.83">  // Access flags values, defined in</a>
+<span class="sourceLineNo">084</span><a id="line.84">  // - https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.1-200-E.1</a>
+<span class="sourceLineNo">085</span><a id="line.85">  // - https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.5-200-A.1</a>
+<span class="sourceLineNo">086</span><a id="line.86">  // - https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.6-200-A.1</a>
+<span class="sourceLineNo">087</span><a id="line.87">  // - https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.7.25</a>
+<span class="sourceLineNo">088</span><a id="line.88"></a>
+<span class="sourceLineNo">089</span><a id="line.89">  int ACC_PUBLIC = 0x0001; // class, field, method</a>
+<span class="sourceLineNo">090</span><a id="line.90">  int ACC_PRIVATE = 0x0002; // class, field, method</a>
+<span class="sourceLineNo">091</span><a id="line.91">  int ACC_PROTECTED = 0x0004; // class, field, method</a>
+<span class="sourceLineNo">092</span><a id="line.92">  int ACC_STATIC = 0x0008; // field, method</a>
+<span class="sourceLineNo">093</span><a id="line.93">  int ACC_FINAL = 0x0010; // class, field, method, parameter</a>
+<span class="sourceLineNo">094</span><a id="line.94">  int ACC_SUPER = 0x0020; // class</a>
+<span class="sourceLineNo">095</span><a id="line.95">  int ACC_SYNCHRONIZED = 0x0020; // method</a>
+<span class="sourceLineNo">096</span><a id="line.96">  int ACC_OPEN = 0x0020; // module</a>
+<span class="sourceLineNo">097</span><a id="line.97">  int ACC_TRANSITIVE = 0x0020; // module requires</a>
+<span class="sourceLineNo">098</span><a id="line.98">  int ACC_VOLATILE = 0x0040; // field</a>
+<span class="sourceLineNo">099</span><a id="line.99">  int ACC_BRIDGE = 0x0040; // method</a>
+<span class="sourceLineNo">100</span><a id="line.100">  int ACC_STATIC_PHASE = 0x0040; // module requires</a>
+<span class="sourceLineNo">101</span><a id="line.101">  int ACC_VARARGS = 0x0080; // method</a>
+<span class="sourceLineNo">102</span><a id="line.102">  int ACC_TRANSIENT = 0x0080; // field</a>
+<span class="sourceLineNo">103</span><a id="line.103">  int ACC_NATIVE = 0x0100; // method</a>
+<span class="sourceLineNo">104</span><a id="line.104">  int ACC_INTERFACE = 0x0200; // class</a>
+<span class="sourceLineNo">105</span><a id="line.105">  int ACC_ABSTRACT = 0x0400; // class, method</a>
+<span class="sourceLineNo">106</span><a id="line.106">  int ACC_STRICT = 0x0800; // method</a>
+<span class="sourceLineNo">107</span><a id="line.107">  int ACC_SYNTHETIC = 0x1000; // class, field, method, parameter, module *</a>
+<span class="sourceLineNo">108</span><a id="line.108">  int ACC_ANNOTATION = 0x2000; // class</a>
+<span class="sourceLineNo">109</span><a id="line.109">  int ACC_ENUM = 0x4000; // class(?) field inner</a>
+<span class="sourceLineNo">110</span><a id="line.110">  int ACC_MANDATED = 0x8000; // parameter, module, module *</a>
+<span class="sourceLineNo">111</span><a id="line.111">  int ACC_MODULE = 0x8000; // class</a>
+<span class="sourceLineNo">112</span><a id="line.112"></a>
+<span class="sourceLineNo">113</span><a id="line.113">  // ASM specific access flags.</a>
+<span class="sourceLineNo">114</span><a id="line.114">  // WARNING: the 16 least significant bits must NOT be used, to avoid conflicts with standard</a>
+<span class="sourceLineNo">115</span><a id="line.115">  // access flags, and also to make sure that these flags are automatically filtered out when</a>
+<span class="sourceLineNo">116</span><a id="line.116">  // written in class files (because access flags are stored using 16 bits only).</a>
+<span class="sourceLineNo">117</span><a id="line.117"></a>
+<span class="sourceLineNo">118</span><a id="line.118">  int ACC_DEPRECATED = 0x20000; // class, field, method</a>
+<span class="sourceLineNo">119</span><a id="line.119"></a>
+<span class="sourceLineNo">120</span><a id="line.120">  // Possible values for the type operand of the NEWARRAY instruction.</a>
+<span class="sourceLineNo">121</span><a id="line.121">  // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-6.html#jvms-6.5.newarray.</a>
+<span class="sourceLineNo">122</span><a id="line.122"></a>
+<span class="sourceLineNo">123</span><a id="line.123">  int T_BOOLEAN = 4;</a>
+<span class="sourceLineNo">124</span><a id="line.124">  int T_CHAR = 5;</a>
+<span class="sourceLineNo">125</span><a id="line.125">  int T_FLOAT = 6;</a>
+<span class="sourceLineNo">126</span><a id="line.126">  int T_DOUBLE = 7;</a>
+<span class="sourceLineNo">127</span><a id="line.127">  int T_BYTE = 8;</a>
+<span class="sourceLineNo">128</span><a id="line.128">  int T_SHORT = 9;</a>
+<span class="sourceLineNo">129</span><a id="line.129">  int T_INT = 10;</a>
+<span class="sourceLineNo">130</span><a id="line.130">  int T_LONG = 11;</a>
+<span class="sourceLineNo">131</span><a id="line.131"></a>
+<span class="sourceLineNo">132</span><a id="line.132">  // Possible values for the reference_kind field of CONSTANT_MethodHandle_info structures.</a>
+<span class="sourceLineNo">133</span><a id="line.133">  // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-4.html#jvms-4.4.8.</a>
+<span class="sourceLineNo">134</span><a id="line.134"></a>
+<span class="sourceLineNo">135</span><a id="line.135">  int H_GETFIELD = 1;</a>
+<span class="sourceLineNo">136</span><a id="line.136">  int H_GETSTATIC = 2;</a>
+<span class="sourceLineNo">137</span><a id="line.137">  int H_PUTFIELD = 3;</a>
+<span class="sourceLineNo">138</span><a id="line.138">  int H_PUTSTATIC = 4;</a>
+<span class="sourceLineNo">139</span><a id="line.139">  int H_INVOKEVIRTUAL = 5;</a>
+<span class="sourceLineNo">140</span><a id="line.140">  int H_INVOKESTATIC = 6;</a>
+<span class="sourceLineNo">141</span><a id="line.141">  int H_INVOKESPECIAL = 7;</a>
+<span class="sourceLineNo">142</span><a id="line.142">  int H_NEWINVOKESPECIAL = 8;</a>
+<span class="sourceLineNo">143</span><a id="line.143">  int H_INVOKEINTERFACE = 9;</a>
+<span class="sourceLineNo">144</span><a id="line.144"></a>
+<span class="sourceLineNo">145</span><a id="line.145">  // ASM specific stack map frame types, used in {@link ClassVisitor#visitFrame}.</a>
+<span class="sourceLineNo">146</span><a id="line.146"></a>
+<span class="sourceLineNo">147</span><a id="line.147">  /** An expanded frame. See {@link ClassReader#EXPAND_FRAMES}. */</a>
+<span class="sourceLineNo">148</span><a id="line.148">  int F_NEW = -1;</a>
+<span class="sourceLineNo">149</span><a id="line.149"></a>
+<span class="sourceLineNo">150</span><a id="line.150">  /** A compressed frame with complete frame data. */</a>
+<span class="sourceLineNo">151</span><a id="line.151">  int F_FULL = 0;</a>
+<span class="sourceLineNo">152</span><a id="line.152"></a>
+<span class="sourceLineNo">153</span><a id="line.153">  /**</a>
+<span class="sourceLineNo">154</span><a id="line.154">   * A compressed frame where locals are the same as the locals in the previous frame, except that</a>
+<span class="sourceLineNo">155</span><a id="line.155">   * additional 1-3 locals are defined, and with an empty stack.</a>
+<span class="sourceLineNo">156</span><a id="line.156">   */</a>
+<span class="sourceLineNo">157</span><a id="line.157">  int F_APPEND = 1;</a>
+<span class="sourceLineNo">158</span><a id="line.158"></a>
+<span class="sourceLineNo">159</span><a id="line.159">  /**</a>
+<span class="sourceLineNo">160</span><a id="line.160">   * A compressed frame where locals are the same as the locals in the previous frame, except that</a>
+<span class="sourceLineNo">161</span><a id="line.161">   * the last 1-3 locals are absent and with an empty stack.</a>
+<span class="sourceLineNo">162</span><a id="line.162">   */</a>
+<span class="sourceLineNo">163</span><a id="line.163">  int F_CHOP = 2;</a>
+<span class="sourceLineNo">164</span><a id="line.164"></a>
+<span class="sourceLineNo">165</span><a id="line.165">  /**</a>
+<span class="sourceLineNo">166</span><a id="line.166">   * A compressed frame with exactly the same locals as the previous frame and with an empty stack.</a>
+<span class="sourceLineNo">167</span><a id="line.167">   */</a>
+<span class="sourceLineNo">168</span><a id="line.168">  int F_SAME = 3;</a>
+<span class="sourceLineNo">169</span><a id="line.169"></a>
+<span class="sourceLineNo">170</span><a id="line.170">  /**</a>
+<span class="sourceLineNo">171</span><a id="line.171">   * A compressed frame with exactly the same locals as the previous frame and with a single value</a>
+<span class="sourceLineNo">172</span><a id="line.172">   * on the stack.</a>
+<span class="sourceLineNo">173</span><a id="line.173">   */</a>
+<span class="sourceLineNo">174</span><a id="line.174">  int F_SAME1 = 4;</a>
+<span class="sourceLineNo">175</span><a id="line.175"></a>
+<span class="sourceLineNo">176</span><a id="line.176">  // Standard stack map frame element types, used in {@link ClassVisitor#visitFrame}.</a>
+<span class="sourceLineNo">177</span><a id="line.177"></a>
+<span class="sourceLineNo">178</span><a id="line.178">  Integer TOP = Frame.ITEM_TOP;</a>
+<span class="sourceLineNo">179</span><a id="line.179">  Integer INTEGER = Frame.ITEM_INTEGER;</a>
+<span class="sourceLineNo">180</span><a id="line.180">  Integer FLOAT = Frame.ITEM_FLOAT;</a>
+<span class="sourceLineNo">181</span><a id="line.181">  Integer DOUBLE = Frame.ITEM_DOUBLE;</a>
+<span class="sourceLineNo">182</span><a id="line.182">  Integer LONG = Frame.ITEM_LONG;</a>
+<span class="sourceLineNo">183</span><a id="line.183">  Integer NULL = Frame.ITEM_NULL;</a>
+<span class="sourceLineNo">184</span><a id="line.184">  Integer UNINITIALIZED_THIS = Frame.ITEM_UNINITIALIZED_THIS;</a>
+<span class="sourceLineNo">185</span><a id="line.185"></a>
+<span class="sourceLineNo">186</span><a id="line.186">  // The JVM opcode values (with the MethodVisitor method name used to visit them in comment, and</a>
+<span class="sourceLineNo">187</span><a id="line.187">  // where '-' means 'same method name as on the previous line').</a>
+<span class="sourceLineNo">188</span><a id="line.188">  // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-6.html.</a>
+<span class="sourceLineNo">189</span><a id="line.189"></a>
+<span class="sourceLineNo">190</span><a id="line.190">  int NOP = 0; // visitInsn</a>
+<span class="sourceLineNo">191</span><a id="line.191">  int ACONST_NULL = 1; // -</a>
+<span class="sourceLineNo">192</span><a id="line.192">  int ICONST_M1 = 2; // -</a>
+<span class="sourceLineNo">193</span><a id="line.193">  int ICONST_0 = 3; // -</a>
+<span class="sourceLineNo">194</span><a id="line.194">  int ICONST_1 = 4; // -</a>
+<span class="sourceLineNo">195</span><a id="line.195">  int ICONST_2 = 5; // -</a>
+<span class="sourceLineNo">196</span><a id="line.196">  int ICONST_3 = 6; // -</a>
+<span class="sourceLineNo">197</span><a id="line.197">  int ICONST_4 = 7; // -</a>
+<span class="sourceLineNo">198</span><a id="line.198">  int ICONST_5 = 8; // -</a>
+<span class="sourceLineNo">199</span><a id="line.199">  int LCONST_0 = 9; // -</a>
+<span class="sourceLineNo">200</span><a id="line.200">  int LCONST_1 = 10; // -</a>
+<span class="sourceLineNo">201</span><a id="line.201">  int FCONST_0 = 11; // -</a>
+<span class="sourceLineNo">202</span><a id="line.202">  int FCONST_1 = 12; // -</a>
+<span class="sourceLineNo">203</span><a id="line.203">  int FCONST_2 = 13; // -</a>
+<span class="sourceLineNo">204</span><a id="line.204">  int DCONST_0 = 14; // -</a>
+<span class="sourceLineNo">205</span><a id="line.205">  int DCONST_1 = 15; // -</a>
+<span class="sourceLineNo">206</span><a id="line.206">  int BIPUSH = 16; // visitIntInsn</a>
+<span class="sourceLineNo">207</span><a id="line.207">  int SIPUSH = 17; // -</a>
+<span class="sourceLineNo">208</span><a id="line.208">  int LDC = 18; // visitLdcInsn</a>
+<span class="sourceLineNo">209</span><a id="line.209">  int ILOAD = 21; // visitVarInsn</a>
+<span class="sourceLineNo">210</span><a id="line.210">  int LLOAD = 22; // -</a>
+<span class="sourceLineNo">211</span><a id="line.211">  int FLOAD = 23; // -</a>
+<span class="sourceLineNo">212</span><a id="line.212">  int DLOAD = 24; // -</a>
+<span class="sourceLineNo">213</span><a id="line.213">  int ALOAD = 25; // -</a>
+<span class="sourceLineNo">214</span><a id="line.214">  int IALOAD = 46; // visitInsn</a>
+<span class="sourceLineNo">215</span><a id="line.215">  int LALOAD = 47; // -</a>
+<span class="sourceLineNo">216</span><a id="line.216">  int FALOAD = 48; // -</a>
+<span class="sourceLineNo">217</span><a id="line.217">  int DALOAD = 49; // -</a>
+<span class="sourceLineNo">218</span><a id="line.218">  int AALOAD = 50; // -</a>
+<span class="sourceLineNo">219</span><a id="line.219">  int BALOAD = 51; // -</a>
+<span class="sourceLineNo">220</span><a id="line.220">  int CALOAD = 52; // -</a>
+<span class="sourceLineNo">221</span><a id="line.221">  int SALOAD = 53; // -</a>
+<span class="sourceLineNo">222</span><a id="line.222">  int ISTORE = 54; // visitVarInsn</a>
+<span class="sourceLineNo">223</span><a id="line.223">  int LSTORE = 55; // -</a>
+<span class="sourceLineNo">224</span><a id="line.224">  int FSTORE = 56; // -</a>
+<span class="sourceLineNo">225</span><a id="line.225">  int DSTORE = 57; // -</a>
+<span class="sourceLineNo">226</span><a id="line.226">  int ASTORE = 58; // -</a>
+<span class="sourceLineNo">227</span><a id="line.227">  int IASTORE = 79; // visitInsn</a>
+<span class="sourceLineNo">228</span><a id="line.228">  int LASTORE = 80; // -</a>
+<span class="sourceLineNo">229</span><a id="line.229">  int FASTORE = 81; // -</a>
+<span class="sourceLineNo">230</span><a id="line.230">  int DASTORE = 82; // -</a>
+<span class="sourceLineNo">231</span><a id="line.231">  int AASTORE = 83; // -</a>
+<span class="sourceLineNo">232</span><a id="line.232">  int BASTORE = 84; // -</a>
+<span class="sourceLineNo">233</span><a id="line.233">  int CASTORE = 85; // -</a>
+<span class="sourceLineNo">234</span><a id="line.234">  int SASTORE = 86; // -</a>
+<span class="sourceLineNo">235</span><a id="line.235">  int POP = 87; // -</a>
+<span class="sourceLineNo">236</span><a id="line.236">  int POP2 = 88; // -</a>
+<span class="sourceLineNo">237</span><a id="line.237">  int DUP = 89; // -</a>
+<span class="sourceLineNo">238</span><a id="line.238">  int DUP_X1 = 90; // -</a>
+<span class="sourceLineNo">239</span><a id="line.239">  int DUP_X2 = 91; // -</a>
+<span class="sourceLineNo">240</span><a id="line.240">  int DUP2 = 92; // -</a>
+<span class="sourceLineNo">241</span><a id="line.241">  int DUP2_X1 = 93; // -</a>
+<span class="sourceLineNo">242</span><a id="line.242">  int DUP2_X2 = 94; // -</a>
+<span class="sourceLineNo">243</span><a id="line.243">  int SWAP = 95; // -</a>
+<span class="sourceLineNo">244</span><a id="line.244">  int IADD = 96; // -</a>
+<span class="sourceLineNo">245</span><a id="line.245">  int LADD = 97; // -</a>
+<span class="sourceLineNo">246</span><a id="line.246">  int FADD = 98; // -</a>
+<span class="sourceLineNo">247</span><a id="line.247">  int DADD = 99; // -</a>
+<span class="sourceLineNo">248</span><a id="line.248">  int ISUB = 100; // -</a>
+<span class="sourceLineNo">249</span><a id="line.249">  int LSUB = 101; // -</a>
+<span class="sourceLineNo">250</span><a id="line.250">  int FSUB = 102; // -</a>
+<span class="sourceLineNo">251</span><a id="line.251">  int DSUB = 103; // -</a>
+<span class="sourceLineNo">252</span><a id="line.252">  int IMUL = 104; // -</a>
+<span class="sourceLineNo">253</span><a id="line.253">  int LMUL = 105; // -</a>
+<span class="sourceLineNo">254</span><a id="line.254">  int FMUL = 106; // -</a>
+<span class="sourceLineNo">255</span><a id="line.255">  int DMUL = 107; // -</a>
+<span class="sourceLineNo">256</span><a id="line.256">  int IDIV = 108; // -</a>
+<span class="sourceLineNo">257</span><a id="line.257">  int LDIV = 109; // -</a>
+<span class="sourceLineNo">258</span><a id="line.258">  int FDIV = 110; // -</a>
+<span class="sourceLineNo">259</span><a id="line.259">  int DDIV = 111; // -</a>
+<span class="sourceLineNo">260</span><a id="line.260">  int IREM = 112; // -</a>
+<span class="sourceLineNo">261</span><a id="line.261">  int LREM = 113; // -</a>
+<span class="sourceLineNo">262</span><a id="line.262">  int FREM = 114; // -</a>
+<span class="sourceLineNo">263</span><a id="line.263">  int DREM = 115; // -</a>
+<span class="sourceLineNo">264</span><a id="line.264">  int INEG = 116; // -</a>
+<span class="sourceLineNo">265</span><a id="line.265">  int LNEG = 117; // -</a>
+<span class="sourceLineNo">266</span><a id="line.266">  int FNEG = 118; // -</a>
+<span class="sourceLineNo">267</span><a id="line.267">  int DNEG = 119; // -</a>
+<span class="sourceLineNo">268</span><a id="line.268">  int ISHL = 120; // -</a>
+<span class="sourceLineNo">269</span><a id="line.269">  int LSHL = 121; // -</a>
+<span class="sourceLineNo">270</span><a id="line.270">  int ISHR = 122; // -</a>
+<span class="sourceLineNo">271</span><a id="line.271">  int LSHR = 123; // -</a>
+<span class="sourceLineNo">272</span><a id="line.272">  int IUSHR = 124; // -</a>
+<span class="sourceLineNo">273</span><a id="line.273">  int LUSHR = 125; // -</a>
+<span class="sourceLineNo">274</span><a id="line.274">  int IAND = 126; // -</a>
+<span class="sourceLineNo">275</span><a id="line.275">  int LAND = 127; // -</a>
+<span class="sourceLineNo">276</span><a id="line.276">  int IOR = 128; // -</a>
+<span class="sourceLineNo">277</span><a id="line.277">  int LOR = 129; // -</a>
+<span class="sourceLineNo">278</span><a id="line.278">  int IXOR = 130; // -</a>
+<span class="sourceLineNo">279</span><a id="line.279">  int LXOR = 131; // -</a>
+<span class="sourceLineNo">280</span><a id="line.280">  int IINC = 132; // visitIincInsn</a>
+<span class="sourceLineNo">281</span><a id="line.281">  int I2L = 133; // visitInsn</a>
+<span class="sourceLineNo">282</span><a id="line.282">  int I2F = 134; // -</a>
+<span class="sourceLineNo">283</span><a id="line.283">  int I2D = 135; // -</a>
+<span class="sourceLineNo">284</span><a id="line.284">  int L2I = 136; // -</a>
+<span class="sourceLineNo">285</span><a id="line.285">  int L2F = 137; // -</a>
+<span class="sourceLineNo">286</span><a id="line.286">  int L2D = 138; // -</a>
+<span class="sourceLineNo">287</span><a id="line.287">  int F2I = 139; // -</a>
+<span class="sourceLineNo">288</span><a id="line.288">  int F2L = 140; // -</a>
+<span class="sourceLineNo">289</span><a id="line.289">  int F2D = 141; // -</a>
+<span class="sourceLineNo">290</span><a id="line.290">  int D2I = 142; // -</a>
+<span class="sourceLineNo">291</span><a id="line.291">  int D2L = 143; // -</a>
+<span class="sourceLineNo">292</span><a id="line.292">  int D2F = 144; // -</a>
+<span class="sourceLineNo">293</span><a id="line.293">  int I2B = 145; // -</a>
+<span class="sourceLineNo">294</span><a id="line.294">  int I2C = 146; // -</a>
+<span class="sourceLineNo">295</span><a id="line.295">  int I2S = 147; // -</a>
+<span class="sourceLineNo">296</span><a id="line.296">  int LCMP = 148; // -</a>
+<span class="sourceLineNo">297</span><a id="line.297">  int FCMPL = 149; // -</a>
+<span class="sourceLineNo">298</span><a id="line.298">  int FCMPG = 150; // -</a>
+<span class="sourceLineNo">299</span><a id="line.299">  int DCMPL = 151; // -</a>
+<span class="sourceLineNo">300</span><a id="line.300">  int DCMPG = 152; // -</a>
+<span class="sourceLineNo">301</span><a id="line.301">  int IFEQ = 153; // visitJumpInsn</a>
+<span class="sourceLineNo">302</span><a id="line.302">  int IFNE = 154; // -</a>
+<span class="sourceLineNo">303</span><a id="line.303">  int IFLT = 155; // -</a>
+<span class="sourceLineNo">304</span><a id="line.304">  int IFGE = 156; // -</a>
+<span class="sourceLineNo">305</span><a id="line.305">  int IFGT = 157; // -</a>
+<span class="sourceLineNo">306</span><a id="line.306">  int IFLE = 158; // -</a>
+<span class="sourceLineNo">307</span><a id="line.307">  int IF_ICMPEQ = 159; // -</a>
+<span class="sourceLineNo">308</span><a id="line.308">  int IF_ICMPNE = 160; // -</a>
+<span class="sourceLineNo">309</span><a id="line.309">  int IF_ICMPLT = 161; // -</a>
+<span class="sourceLineNo">310</span><a id="line.310">  int IF_ICMPGE = 162; // -</a>
+<span class="sourceLineNo">311</span><a id="line.311">  int IF_ICMPGT = 163; // -</a>
+<span class="sourceLineNo">312</span><a id="line.312">  int IF_ICMPLE = 164; // -</a>
+<span class="sourceLineNo">313</span><a id="line.313">  int IF_ACMPEQ = 165; // -</a>
+<span class="sourceLineNo">314</span><a id="line.314">  int IF_ACMPNE = 166; // -</a>
+<span class="sourceLineNo">315</span><a id="line.315">  int GOTO = 167; // -</a>
+<span class="sourceLineNo">316</span><a id="line.316">  int JSR = 168; // -</a>
+<span class="sourceLineNo">317</span><a id="line.317">  int RET = 169; // visitVarInsn</a>
+<span class="sourceLineNo">318</span><a id="line.318">  int TABLESWITCH = 170; // visiTableSwitchInsn</a>
+<span class="sourceLineNo">319</span><a id="line.319">  int LOOKUPSWITCH = 171; // visitLookupSwitch</a>
+<span class="sourceLineNo">320</span><a id="line.320">  int IRETURN = 172; // visitInsn</a>
+<span class="sourceLineNo">321</span><a id="line.321">  int LRETURN = 173; // -</a>
+<span class="sourceLineNo">322</span><a id="line.322">  int FRETURN = 174; // -</a>
+<span class="sourceLineNo">323</span><a id="line.323">  int DRETURN = 175; // -</a>
+<span class="sourceLineNo">324</span><a id="line.324">  int ARETURN = 176; // -</a>
+<span class="sourceLineNo">325</span><a id="line.325">  int RETURN = 177; // -</a>
+<span class="sourceLineNo">326</span><a id="line.326">  int GETSTATIC = 178; // visitFieldInsn</a>
+<span class="sourceLineNo">327</span><a id="line.327">  int PUTSTATIC = 179; // -</a>
+<span class="sourceLineNo">328</span><a id="line.328">  int GETFIELD = 180; // -</a>
+<span class="sourceLineNo">329</span><a id="line.329">  int PUTFIELD = 181; // -</a>
+<span class="sourceLineNo">330</span><a id="line.330">  int INVOKEVIRTUAL = 182; // visitMethodInsn</a>
+<span class="sourceLineNo">331</span><a id="line.331">  int INVOKESPECIAL = 183; // -</a>
+<span class="sourceLineNo">332</span><a id="line.332">  int INVOKESTATIC = 184; // -</a>
+<span class="sourceLineNo">333</span><a id="line.333">  int INVOKEINTERFACE = 185; // -</a>
+<span class="sourceLineNo">334</span><a id="line.334">  int INVOKEDYNAMIC = 186; // visitInvokeDynamicInsn</a>
+<span class="sourceLineNo">335</span><a id="line.335">  int NEW = 187; // visitTypeInsn</a>
+<span class="sourceLineNo">336</span><a id="line.336">  int NEWARRAY = 188; // visitIntInsn</a>
+<span class="sourceLineNo">337</span><a id="line.337">  int ANEWARRAY = 189; // visitTypeInsn</a>
+<span class="sourceLineNo">338</span><a id="line.338">  int ARRAYLENGTH = 190; // visitInsn</a>
+<span class="sourceLineNo">339</span><a id="line.339">  int ATHROW = 191; // -</a>
+<span class="sourceLineNo">340</span><a id="line.340">  int CHECKCAST = 192; // visitTypeInsn</a>
+<span class="sourceLineNo">341</span><a id="line.341">  int INSTANCEOF = 193; // -</a>
+<span class="sourceLineNo">342</span><a id="line.342">  int MONITORENTER = 194; // visitInsn</a>
+<span class="sourceLineNo">343</span><a id="line.343">  int MONITOREXIT = 195; // -</a>
+<span class="sourceLineNo">344</span><a id="line.344">  int MULTIANEWARRAY = 197; // visitMultiANewArrayInsn</a>
+<span class="sourceLineNo">345</span><a id="line.345">  int IFNULL = 198; // visitJumpInsn</a>
+<span class="sourceLineNo">346</span><a id="line.346">  int IFNONNULL = 199; // -</a>
+<span class="sourceLineNo">347</span><a id="line.347">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

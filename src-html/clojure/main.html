@@ -1,0 +1,113 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> *   Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> *   The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> *   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> *   which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> *   By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> *       the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> *   You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> **/</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">package clojure;</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">import clojure.lang.Symbol;</a>
+<span class="sourceLineNo">014</span><a id="line.14">import clojure.lang.Var;</a>
+<span class="sourceLineNo">015</span><a id="line.15">import clojure.lang.RT;</a>
+<span class="sourceLineNo">016</span><a id="line.16"></a>
+<span class="sourceLineNo">017</span><a id="line.17">public class main{</a>
+<span class="sourceLineNo">018</span><a id="line.18"></a>
+<span class="sourceLineNo">019</span><a id="line.19">final static private Symbol CLOJURE_MAIN = Symbol.intern("clojure.main");</a>
+<span class="sourceLineNo">020</span><a id="line.20">final static private Var REQUIRE = RT.var("clojure.core", "require");</a>
+<span class="sourceLineNo">021</span><a id="line.21">final static private Var LEGACY_REPL = RT.var("clojure.main", "legacy-repl");</a>
+<span class="sourceLineNo">022</span><a id="line.22">final static private Var LEGACY_SCRIPT = RT.var("clojure.main", "legacy-script");</a>
+<span class="sourceLineNo">023</span><a id="line.23">final static private Var MAIN = RT.var("clojure.main", "main");</a>
+<span class="sourceLineNo">024</span><a id="line.24"></a>
+<span class="sourceLineNo">025</span><a id="line.25">public static void legacy_repl(String[] args) {</a>
+<span class="sourceLineNo">026</span><a id="line.26">    REQUIRE.invoke(CLOJURE_MAIN);</a>
+<span class="sourceLineNo">027</span><a id="line.27">    LEGACY_REPL.invoke(RT.seq(args));</a>
+<span class="sourceLineNo">028</span><a id="line.28">}</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">public static void legacy_script(String[] args) {</a>
+<span class="sourceLineNo">031</span><a id="line.31">    REQUIRE.invoke(CLOJURE_MAIN);</a>
+<span class="sourceLineNo">032</span><a id="line.32">    LEGACY_SCRIPT.invoke(RT.seq(args));</a>
+<span class="sourceLineNo">033</span><a id="line.33">}</a>
+<span class="sourceLineNo">034</span><a id="line.34"></a>
+<span class="sourceLineNo">035</span><a id="line.35">public static void main(String[] args) {</a>
+<span class="sourceLineNo">036</span><a id="line.36">    REQUIRE.invoke(CLOJURE_MAIN);</a>
+<span class="sourceLineNo">037</span><a id="line.37">    MAIN.applyTo(RT.seq(args));</a>
+<span class="sourceLineNo">038</span><a id="line.38">}</a>
+<span class="sourceLineNo">039</span><a id="line.39">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">// ASM: a very small and fast Java bytecode manipulation framework</a>
+<span class="sourceLineNo">002</span><a id="line.2">// Copyright (c) 2000-2011 INRIA, France Telecom</a>
+<span class="sourceLineNo">003</span><a id="line.3">// All rights reserved.</a>
+<span class="sourceLineNo">004</span><a id="line.4">//</a>
+<span class="sourceLineNo">005</span><a id="line.5">// Redistribution and use in source and binary forms, with or without</a>
+<span class="sourceLineNo">006</span><a id="line.6">// modification, are permitted provided that the following conditions</a>
+<span class="sourceLineNo">007</span><a id="line.7">// are met:</a>
+<span class="sourceLineNo">008</span><a id="line.8">// 1. Redistributions of source code must retain the above copyright</a>
+<span class="sourceLineNo">009</span><a id="line.9">//    notice, this list of conditions and the following disclaimer.</a>
+<span class="sourceLineNo">010</span><a id="line.10">// 2. Redistributions in binary form must reproduce the above copyright</a>
+<span class="sourceLineNo">011</span><a id="line.11">//    notice, this list of conditions and the following disclaimer in the</a>
+<span class="sourceLineNo">012</span><a id="line.12">//    documentation and/or other materials provided with the distribution.</a>
+<span class="sourceLineNo">013</span><a id="line.13">// 3. Neither the name of the copyright holders nor the names of its</a>
+<span class="sourceLineNo">014</span><a id="line.14">//    contributors may be used to endorse or promote products derived from</a>
+<span class="sourceLineNo">015</span><a id="line.15">//    this software without specific prior written permission.</a>
+<span class="sourceLineNo">016</span><a id="line.16">//</a>
+<span class="sourceLineNo">017</span><a id="line.17">// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"</a>
+<span class="sourceLineNo">018</span><a id="line.18">// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</a>
+<span class="sourceLineNo">019</span><a id="line.19">// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</a>
+<span class="sourceLineNo">020</span><a id="line.20">// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE</a>
+<span class="sourceLineNo">021</span><a id="line.21">// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</a>
+<span class="sourceLineNo">022</span><a id="line.22">// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</a>
+<span class="sourceLineNo">023</span><a id="line.23">// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</a>
+<span class="sourceLineNo">024</span><a id="line.24">// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</a>
+<span class="sourceLineNo">025</span><a id="line.25">// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</a>
+<span class="sourceLineNo">026</span><a id="line.26">// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF</a>
+<span class="sourceLineNo">027</span><a id="line.27">// THE POSSIBILITY OF SUCH DAMAGE.</a>
+<span class="sourceLineNo">028</span><a id="line.28">package clojure.asm;</a>
+<span class="sourceLineNo">029</span><a id="line.29"></a>
+<span class="sourceLineNo">030</span><a id="line.30">/**</a>
+<span class="sourceLineNo">031</span><a id="line.31"> * A visitor to visit a Java class. The methods of this class must be called in the following order:</a>
+<span class="sourceLineNo">032</span><a id="line.32"> * &lt;tt&gt;visit&lt;/tt&gt; [ &lt;tt&gt;visitSource&lt;/tt&gt; ] [ &lt;tt&gt;visitModule&lt;/tt&gt; ][ &lt;tt&gt;visitNestHost&lt;/tt&gt; ][</a>
+<span class="sourceLineNo">033</span><a id="line.33"> * &lt;tt&gt;visitOuterClass&lt;/tt&gt; ] ( &lt;tt&gt;visitAnnotation&lt;/tt&gt; | &lt;tt&gt;visitTypeAnnotation&lt;/tt&gt; |</a>
+<span class="sourceLineNo">034</span><a id="line.34"> * &lt;tt&gt;visitAttribute&lt;/tt&gt; )* ( &lt;tt&gt;visitNestMember&lt;/tt&gt; | &lt;tt&gt;visitInnerClass&lt;/tt&gt; |</a>
+<span class="sourceLineNo">035</span><a id="line.35"> * &lt;tt&gt;visitField&lt;/tt&gt; | &lt;tt&gt;visitMethod&lt;/tt&gt; )* &lt;tt&gt;visitEnd&lt;/tt&gt;.</a>
+<span class="sourceLineNo">036</span><a id="line.36"> *</a>
+<span class="sourceLineNo">037</span><a id="line.37"> * @author Eric Bruneton</a>
+<span class="sourceLineNo">038</span><a id="line.38"> */</a>
+<span class="sourceLineNo">039</span><a id="line.39">public abstract class ClassVisitor {</a>
+<span class="sourceLineNo">040</span><a id="line.40"></a>
+<span class="sourceLineNo">041</span><a id="line.41">  /**</a>
+<span class="sourceLineNo">042</span><a id="line.42">   * The ASM API version implemented by this visitor. The value of this field must be one of {@link</a>
+<span class="sourceLineNo">043</span><a id="line.43">   * Opcodes#ASM4}, {@link Opcodes#ASM5}, {@link Opcodes#ASM6} or {@link Opcodes#ASM7_EXPERIMENTAL}.</a>
+<span class="sourceLineNo">044</span><a id="line.44">   */</a>
+<span class="sourceLineNo">045</span><a id="line.45">  protected final int api;</a>
+<span class="sourceLineNo">046</span><a id="line.46"></a>
+<span class="sourceLineNo">047</span><a id="line.47">  /** The class visitor to which this visitor must delegate method calls. May be null. */</a>
+<span class="sourceLineNo">048</span><a id="line.48">  protected ClassVisitor cv;</a>
+<span class="sourceLineNo">049</span><a id="line.49"></a>
+<span class="sourceLineNo">050</span><a id="line.50">  /**</a>
+<span class="sourceLineNo">051</span><a id="line.51">   * Constructs a new {@link ClassVisitor}.</a>
+<span class="sourceLineNo">052</span><a id="line.52">   *</a>
+<span class="sourceLineNo">053</span><a id="line.53">   * @param api the ASM API version implemented by this visitor. Must be one of {@link</a>
+<span class="sourceLineNo">054</span><a id="line.54">   *     Opcodes#ASM4}, {@link Opcodes#ASM5}, {@link Opcodes#ASM6} or {@link</a>
+<span class="sourceLineNo">055</span><a id="line.55">   *     Opcodes#ASM7_EXPERIMENTAL}.</a>
+<span class="sourceLineNo">056</span><a id="line.56">   */</a>
+<span class="sourceLineNo">057</span><a id="line.57">  public ClassVisitor(final int api) {</a>
+<span class="sourceLineNo">058</span><a id="line.58">    this(api, null);</a>
+<span class="sourceLineNo">059</span><a id="line.59">  }</a>
+<span class="sourceLineNo">060</span><a id="line.60"></a>
+<span class="sourceLineNo">061</span><a id="line.61">  /**</a>
+<span class="sourceLineNo">062</span><a id="line.62">   * Constructs a new {@link ClassVisitor}.</a>
+<span class="sourceLineNo">063</span><a id="line.63">   *</a>
+<span class="sourceLineNo">064</span><a id="line.64">   * @param api the ASM API version implemented by this visitor. Must be one of {@link</a>
+<span class="sourceLineNo">065</span><a id="line.65">   *     Opcodes#ASM4}, {@link Opcodes#ASM5}, {@link Opcodes#ASM6} or {@link</a>
+<span class="sourceLineNo">066</span><a id="line.66">   *     Opcodes#ASM7_EXPERIMENTAL}.</a>
+<span class="sourceLineNo">067</span><a id="line.67">   * @param classVisitor the class visitor to which this visitor must delegate method calls. May be</a>
+<span class="sourceLineNo">068</span><a id="line.68">   *     null.</a>
+<span class="sourceLineNo">069</span><a id="line.69">   */</a>
+<span class="sourceLineNo">070</span><a id="line.70">  public ClassVisitor(final int api, final ClassVisitor classVisitor) {</a>
+<span class="sourceLineNo">071</span><a id="line.71">    if (api != Opcodes.ASM6</a>
+<span class="sourceLineNo">072</span><a id="line.72">        &amp;&amp; api != Opcodes.ASM5</a>
+<span class="sourceLineNo">073</span><a id="line.73">        &amp;&amp; api != Opcodes.ASM4</a>
+<span class="sourceLineNo">074</span><a id="line.74">        &amp;&amp; api != Opcodes.ASM7_EXPERIMENTAL) {</a>
+<span class="sourceLineNo">075</span><a id="line.75">      throw new IllegalArgumentException();</a>
+<span class="sourceLineNo">076</span><a id="line.76">    }</a>
+<span class="sourceLineNo">077</span><a id="line.77">    this.api = api;</a>
+<span class="sourceLineNo">078</span><a id="line.78">    this.cv = classVisitor;</a>
+<span class="sourceLineNo">079</span><a id="line.79">  }</a>
+<span class="sourceLineNo">080</span><a id="line.80"></a>
+<span class="sourceLineNo">081</span><a id="line.81">  /**</a>
+<span class="sourceLineNo">082</span><a id="line.82">   * Visits the header of the class.</a>
+<span class="sourceLineNo">083</span><a id="line.83">   *</a>
+<span class="sourceLineNo">084</span><a id="line.84">   * @param version the class version. The minor version is stored in the 16 most significant bits,</a>
+<span class="sourceLineNo">085</span><a id="line.85">   *     and the major version in the 16 least significant bits.</a>
+<span class="sourceLineNo">086</span><a id="line.86">   * @param access the class's access flags (see {@link Opcodes}). This parameter also indicates if</a>
+<span class="sourceLineNo">087</span><a id="line.87">   *     the class is deprecated.</a>
+<span class="sourceLineNo">088</span><a id="line.88">   * @param name the internal name of the class (see {@link Type#getInternalName()}).</a>
+<span class="sourceLineNo">089</span><a id="line.89">   * @param signature the signature of this class. May be &lt;tt&gt;null&lt;/tt&gt; if the class is not a</a>
+<span class="sourceLineNo">090</span><a id="line.90">   *     generic one, and does not extend or implement generic classes or interfaces.</a>
+<span class="sourceLineNo">091</span><a id="line.91">   * @param superName the internal of name of the super class (see {@link Type#getInternalName()}).</a>
+<span class="sourceLineNo">092</span><a id="line.92">   *     For interfaces, the super class is {@link Object}. May be &lt;tt&gt;null&lt;/tt&gt;, but only for the</a>
+<span class="sourceLineNo">093</span><a id="line.93">   *     {@link Object} class.</a>
+<span class="sourceLineNo">094</span><a id="line.94">   * @param interfaces the internal names of the class's interfaces (see {@link</a>
+<span class="sourceLineNo">095</span><a id="line.95">   *     Type#getInternalName()}). May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">096</span><a id="line.96">   */</a>
+<span class="sourceLineNo">097</span><a id="line.97">  public void visit(</a>
+<span class="sourceLineNo">098</span><a id="line.98">      final int version,</a>
+<span class="sourceLineNo">099</span><a id="line.99">      final int access,</a>
+<span class="sourceLineNo">100</span><a id="line.100">      final String name,</a>
+<span class="sourceLineNo">101</span><a id="line.101">      final String signature,</a>
+<span class="sourceLineNo">102</span><a id="line.102">      final String superName,</a>
+<span class="sourceLineNo">103</span><a id="line.103">      final String[] interfaces) {</a>
+<span class="sourceLineNo">104</span><a id="line.104">    if (cv != null) {</a>
+<span class="sourceLineNo">105</span><a id="line.105">      cv.visit(version, access, name, signature, superName, interfaces);</a>
+<span class="sourceLineNo">106</span><a id="line.106">    }</a>
+<span class="sourceLineNo">107</span><a id="line.107">  }</a>
+<span class="sourceLineNo">108</span><a id="line.108"></a>
+<span class="sourceLineNo">109</span><a id="line.109">  /**</a>
+<span class="sourceLineNo">110</span><a id="line.110">   * Visits the source of the class.</a>
+<span class="sourceLineNo">111</span><a id="line.111">   *</a>
+<span class="sourceLineNo">112</span><a id="line.112">   * @param source the name of the source file from which the class was compiled. May be</a>
+<span class="sourceLineNo">113</span><a id="line.113">   *     &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">114</span><a id="line.114">   * @param debug additional debug information to compute the correspondence between source and</a>
+<span class="sourceLineNo">115</span><a id="line.115">   *     compiled elements of the class. May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">116</span><a id="line.116">   */</a>
+<span class="sourceLineNo">117</span><a id="line.117">  public void visitSource(final String source, final String debug) {</a>
+<span class="sourceLineNo">118</span><a id="line.118">    if (cv != null) {</a>
+<span class="sourceLineNo">119</span><a id="line.119">      cv.visitSource(source, debug);</a>
+<span class="sourceLineNo">120</span><a id="line.120">    }</a>
+<span class="sourceLineNo">121</span><a id="line.121">  }</a>
+<span class="sourceLineNo">122</span><a id="line.122"></a>
+<span class="sourceLineNo">123</span><a id="line.123">  /**</a>
+<span class="sourceLineNo">124</span><a id="line.124">   * Visit the module corresponding to the class.</a>
+<span class="sourceLineNo">125</span><a id="line.125">   *</a>
+<span class="sourceLineNo">126</span><a id="line.126">   * @param name the fully qualified name (using dots) of the module.</a>
+<span class="sourceLineNo">127</span><a id="line.127">   * @param access the module access flags, among {@code ACC_OPEN}, {@code ACC_SYNTHETIC} and {@code</a>
+<span class="sourceLineNo">128</span><a id="line.128">   *     ACC_MANDATED}.</a>
+<span class="sourceLineNo">129</span><a id="line.129">   * @param version the module version, or &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">130</span><a id="line.130">   * @return a visitor to visit the module values, or &lt;tt&gt;null&lt;/tt&gt; if this visitor is not</a>
+<span class="sourceLineNo">131</span><a id="line.131">   *     interested in visiting this module.</a>
+<span class="sourceLineNo">132</span><a id="line.132">   */</a>
+<span class="sourceLineNo">133</span><a id="line.133">  public ModuleVisitor visitModule(final String name, final int access, final String version) {</a>
+<span class="sourceLineNo">134</span><a id="line.134">    if (api &lt; Opcodes.ASM6) {</a>
+<span class="sourceLineNo">135</span><a id="line.135">      throw new UnsupportedOperationException();</a>
+<span class="sourceLineNo">136</span><a id="line.136">    }</a>
+<span class="sourceLineNo">137</span><a id="line.137">    if (cv != null) {</a>
+<span class="sourceLineNo">138</span><a id="line.138">      return cv.visitModule(name, access, version);</a>
+<span class="sourceLineNo">139</span><a id="line.139">    }</a>
+<span class="sourceLineNo">140</span><a id="line.140">    return null;</a>
+<span class="sourceLineNo">141</span><a id="line.141">  }</a>
+<span class="sourceLineNo">142</span><a id="line.142"></a>
+<span class="sourceLineNo">143</span><a id="line.143">  /**</a>
+<span class="sourceLineNo">144</span><a id="line.144">   * &lt;b&gt;Experimental, use at your own risk. This method will be renamed when it becomes stable, this</a>
+<span class="sourceLineNo">145</span><a id="line.145">   * will break existing code using it&lt;/b&gt;. Visits the nest host class of the class. A nest is a set</a>
+<span class="sourceLineNo">146</span><a id="line.146">   * of classes of the same package that share access to their private members. One of these</a>
+<span class="sourceLineNo">147</span><a id="line.147">   * classes, called the host, lists the other members of the nest, which in turn should link to the</a>
+<span class="sourceLineNo">148</span><a id="line.148">   * host of their nest. This method must be called only once and only if the visited class is a</a>
+<span class="sourceLineNo">149</span><a id="line.149">   * non-host member of a nest. A class is implicitly its own nest, so it's invalid to call this</a>
+<span class="sourceLineNo">150</span><a id="line.150">   * method with the visited class name as argument.</a>
+<span class="sourceLineNo">151</span><a id="line.151">   *</a>
+<span class="sourceLineNo">152</span><a id="line.152">   * @param nestHost the internal name of the host class of the nest.</a>
+<span class="sourceLineNo">153</span><a id="line.153">   * @deprecated This API is experimental.</a>
+<span class="sourceLineNo">154</span><a id="line.154">   */</a>
+<span class="sourceLineNo">155</span><a id="line.155">  @Deprecated</a>
+<span class="sourceLineNo">156</span><a id="line.156">  public void visitNestHostExperimental(final String nestHost) {</a>
+<span class="sourceLineNo">157</span><a id="line.157">    if (api &lt; Opcodes.ASM7_EXPERIMENTAL) {</a>
+<span class="sourceLineNo">158</span><a id="line.158">      throw new UnsupportedOperationException();</a>
+<span class="sourceLineNo">159</span><a id="line.159">    }</a>
+<span class="sourceLineNo">160</span><a id="line.160">    if (cv != null) {</a>
+<span class="sourceLineNo">161</span><a id="line.161">      cv.visitNestHostExperimental(nestHost);</a>
+<span class="sourceLineNo">162</span><a id="line.162">    }</a>
+<span class="sourceLineNo">163</span><a id="line.163">  }</a>
+<span class="sourceLineNo">164</span><a id="line.164"></a>
+<span class="sourceLineNo">165</span><a id="line.165">  /**</a>
+<span class="sourceLineNo">166</span><a id="line.166">   * Visits the enclosing class of the class. This method must be called only if the class has an</a>
+<span class="sourceLineNo">167</span><a id="line.167">   * enclosing class.</a>
+<span class="sourceLineNo">168</span><a id="line.168">   *</a>
+<span class="sourceLineNo">169</span><a id="line.169">   * @param owner internal name of the enclosing class of the class.</a>
+<span class="sourceLineNo">170</span><a id="line.170">   * @param name the name of the method that contains the class, or &lt;tt&gt;null&lt;/tt&gt; if the class is</a>
+<span class="sourceLineNo">171</span><a id="line.171">   *     not enclosed in a method of its enclosing class.</a>
+<span class="sourceLineNo">172</span><a id="line.172">   * @param descriptor the descriptor of the method that contains the class, or &lt;tt&gt;null&lt;/tt&gt; if the</a>
+<span class="sourceLineNo">173</span><a id="line.173">   *     class is not enclosed in a method of its enclosing class.</a>
+<span class="sourceLineNo">174</span><a id="line.174">   */</a>
+<span class="sourceLineNo">175</span><a id="line.175">  public void visitOuterClass(final String owner, final String name, final String descriptor) {</a>
+<span class="sourceLineNo">176</span><a id="line.176">    if (cv != null) {</a>
+<span class="sourceLineNo">177</span><a id="line.177">      cv.visitOuterClass(owner, name, descriptor);</a>
+<span class="sourceLineNo">178</span><a id="line.178">    }</a>
+<span class="sourceLineNo">179</span><a id="line.179">  }</a>
+<span class="sourceLineNo">180</span><a id="line.180"></a>
+<span class="sourceLineNo">181</span><a id="line.181">  /**</a>
+<span class="sourceLineNo">182</span><a id="line.182">   * Visits an annotation of the class.</a>
+<span class="sourceLineNo">183</span><a id="line.183">   *</a>
+<span class="sourceLineNo">184</span><a id="line.184">   * @param descriptor the class descriptor of the annotation class.</a>
+<span class="sourceLineNo">185</span><a id="line.185">   * @param visible &lt;tt&gt;true&lt;/tt&gt; if the annotation is visible at runtime.</a>
+<span class="sourceLineNo">186</span><a id="line.186">   * @return a visitor to visit the annotation values, or &lt;tt&gt;null&lt;/tt&gt; if this visitor is not</a>
+<span class="sourceLineNo">187</span><a id="line.187">   *     interested in visiting this annotation.</a>
+<span class="sourceLineNo">188</span><a id="line.188">   */</a>
+<span class="sourceLineNo">189</span><a id="line.189">  public AnnotationVisitor visitAnnotation(final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">190</span><a id="line.190">    if (cv != null) {</a>
+<span class="sourceLineNo">191</span><a id="line.191">      return cv.visitAnnotation(descriptor, visible);</a>
+<span class="sourceLineNo">192</span><a id="line.192">    }</a>
+<span class="sourceLineNo">193</span><a id="line.193">    return null;</a>
+<span class="sourceLineNo">194</span><a id="line.194">  }</a>
+<span class="sourceLineNo">195</span><a id="line.195"></a>
+<span class="sourceLineNo">196</span><a id="line.196">  /**</a>
+<span class="sourceLineNo">197</span><a id="line.197">   * Visits an annotation on a type in the class signature.</a>
+<span class="sourceLineNo">198</span><a id="line.198">   *</a>
+<span class="sourceLineNo">199</span><a id="line.199">   * @param typeRef a reference to the annotated type. The sort of this type reference must be</a>
+<span class="sourceLineNo">200</span><a id="line.200">   *     {@link TypeReference#CLASS_TYPE_PARAMETER}, {@link</a>
+<span class="sourceLineNo">201</span><a id="line.201">   *     TypeReference#CLASS_TYPE_PARAMETER_BOUND} or {@link TypeReference#CLASS_EXTENDS}. See</a>
+<span class="sourceLineNo">202</span><a id="line.202">   *     {@link TypeReference}.</a>
+<span class="sourceLineNo">203</span><a id="line.203">   * @param typePath the path to the annotated type argument, wildcard bound, array element type, or</a>
+<span class="sourceLineNo">204</span><a id="line.204">   *     static inner type within 'typeRef'. May be &lt;tt&gt;null&lt;/tt&gt; if the annotation targets</a>
+<span class="sourceLineNo">205</span><a id="line.205">   *     'typeRef' as a whole.</a>
+<span class="sourceLineNo">206</span><a id="line.206">   * @param descriptor the class descriptor of the annotation class.</a>
+<span class="sourceLineNo">207</span><a id="line.207">   * @param visible &lt;tt&gt;true&lt;/tt&gt; if the annotation is visible at runtime.</a>
+<span class="sourceLineNo">208</span><a id="line.208">   * @return a visitor to visit the annotation values, or &lt;tt&gt;null&lt;/tt&gt; if this visitor is not</a>
+<span class="sourceLineNo">209</span><a id="line.209">   *     interested in visiting this annotation.</a>
+<span class="sourceLineNo">210</span><a id="line.210">   */</a>
+<span class="sourceLineNo">211</span><a id="line.211">  public AnnotationVisitor visitTypeAnnotation(</a>
+<span class="sourceLineNo">212</span><a id="line.212">      final int typeRef, final TypePath typePath, final String descriptor, final boolean visible) {</a>
+<span class="sourceLineNo">213</span><a id="line.213">    if (api &lt; Opcodes.ASM5) {</a>
+<span class="sourceLineNo">214</span><a id="line.214">      throw new UnsupportedOperationException();</a>
+<span class="sourceLineNo">215</span><a id="line.215">    }</a>
+<span class="sourceLineNo">216</span><a id="line.216">    if (cv != null) {</a>
+<span class="sourceLineNo">217</span><a id="line.217">      return cv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);</a>
+<span class="sourceLineNo">218</span><a id="line.218">    }</a>
+<span class="sourceLineNo">219</span><a id="line.219">    return null;</a>
+<span class="sourceLineNo">220</span><a id="line.220">  }</a>
+<span class="sourceLineNo">221</span><a id="line.221"></a>
+<span class="sourceLineNo">222</span><a id="line.222">  /**</a>
+<span class="sourceLineNo">223</span><a id="line.223">   * Visits a non standard attribute of the class.</a>
+<span class="sourceLineNo">224</span><a id="line.224">   *</a>
+<span class="sourceLineNo">225</span><a id="line.225">   * @param attribute an attribute.</a>
+<span class="sourceLineNo">226</span><a id="line.226">   */</a>
+<span class="sourceLineNo">227</span><a id="line.227">  public void visitAttribute(final Attribute attribute) {</a>
+<span class="sourceLineNo">228</span><a id="line.228">    if (cv != null) {</a>
+<span class="sourceLineNo">229</span><a id="line.229">      cv.visitAttribute(attribute);</a>
+<span class="sourceLineNo">230</span><a id="line.230">    }</a>
+<span class="sourceLineNo">231</span><a id="line.231">  }</a>
+<span class="sourceLineNo">232</span><a id="line.232"></a>
+<span class="sourceLineNo">233</span><a id="line.233">  /**</a>
+<span class="sourceLineNo">234</span><a id="line.234">   * &lt;b&gt;Experimental, use at your own risk. This method will be renamed when it becomes stable, this</a>
+<span class="sourceLineNo">235</span><a id="line.235">   * will break existing code using it&lt;/b&gt;. Visits a member of the nest. A nest is a set of classes</a>
+<span class="sourceLineNo">236</span><a id="line.236">   * of the same package that share access to their private members. One of these classes, called</a>
+<span class="sourceLineNo">237</span><a id="line.237">   * the host, lists the other members of the nest, which in turn should link to the host of their</a>
+<span class="sourceLineNo">238</span><a id="line.238">   * nest. This method must be called only if the visited class is the host of a nest. A nest host</a>
+<span class="sourceLineNo">239</span><a id="line.239">   * is implicitly a member of its own nest, so it's invalid to call this method with the visited</a>
+<span class="sourceLineNo">240</span><a id="line.240">   * class name as argument.</a>
+<span class="sourceLineNo">241</span><a id="line.241">   *</a>
+<span class="sourceLineNo">242</span><a id="line.242">   * @param nestMember the internal name of a nest member.</a>
+<span class="sourceLineNo">243</span><a id="line.243">   * @deprecated This API is experimental.</a>
+<span class="sourceLineNo">244</span><a id="line.244">   */</a>
+<span class="sourceLineNo">245</span><a id="line.245">  @Deprecated</a>
+<span class="sourceLineNo">246</span><a id="line.246">  public void visitNestMemberExperimental(final String nestMember) {</a>
+<span class="sourceLineNo">247</span><a id="line.247">    if (api &lt; Opcodes.ASM7_EXPERIMENTAL) {</a>
+<span class="sourceLineNo">248</span><a id="line.248">      throw new UnsupportedOperationException();</a>
+<span class="sourceLineNo">249</span><a id="line.249">    }</a>
+<span class="sourceLineNo">250</span><a id="line.250">    if (cv != null) {</a>
+<span class="sourceLineNo">251</span><a id="line.251">      cv.visitNestMemberExperimental(nestMember);</a>
+<span class="sourceLineNo">252</span><a id="line.252">    }</a>
+<span class="sourceLineNo">253</span><a id="line.253">  }</a>
+<span class="sourceLineNo">254</span><a id="line.254"></a>
+<span class="sourceLineNo">255</span><a id="line.255">  /**</a>
+<span class="sourceLineNo">256</span><a id="line.256">   * Visits information about an inner class. This inner class is not necessarily a member of the</a>
+<span class="sourceLineNo">257</span><a id="line.257">   * class being visited.</a>
+<span class="sourceLineNo">258</span><a id="line.258">   *</a>
+<span class="sourceLineNo">259</span><a id="line.259">   * @param name the internal name of an inner class (see {@link Type#getInternalName()}).</a>
+<span class="sourceLineNo">260</span><a id="line.260">   * @param outerName the internal name of the class to which the inner class belongs (see {@link</a>
+<span class="sourceLineNo">261</span><a id="line.261">   *     Type#getInternalName()}). May be &lt;tt&gt;null&lt;/tt&gt; for not member classes.</a>
+<span class="sourceLineNo">262</span><a id="line.262">   * @param innerName the (simple) name of the inner class inside its enclosing class. May be</a>
+<span class="sourceLineNo">263</span><a id="line.263">   *     &lt;tt&gt;null&lt;/tt&gt; for anonymous inner classes.</a>
+<span class="sourceLineNo">264</span><a id="line.264">   * @param access the access flags of the inner class as originally declared in the enclosing</a>
+<span class="sourceLineNo">265</span><a id="line.265">   *     class.</a>
+<span class="sourceLineNo">266</span><a id="line.266">   */</a>
+<span class="sourceLineNo">267</span><a id="line.267">  public void visitInnerClass(</a>
+<span class="sourceLineNo">268</span><a id="line.268">      final String name, final String outerName, final String innerName, final int access) {</a>
+<span class="sourceLineNo">269</span><a id="line.269">    if (cv != null) {</a>
+<span class="sourceLineNo">270</span><a id="line.270">      cv.visitInnerClass(name, outerName, innerName, access);</a>
+<span class="sourceLineNo">271</span><a id="line.271">    }</a>
+<span class="sourceLineNo">272</span><a id="line.272">  }</a>
+<span class="sourceLineNo">273</span><a id="line.273"></a>
+<span class="sourceLineNo">274</span><a id="line.274">  /**</a>
+<span class="sourceLineNo">275</span><a id="line.275">   * Visits a field of the class.</a>
+<span class="sourceLineNo">276</span><a id="line.276">   *</a>
+<span class="sourceLineNo">277</span><a id="line.277">   * @param access the field's access flags (see {@link Opcodes}). This parameter also indicates if</a>
+<span class="sourceLineNo">278</span><a id="line.278">   *     the field is synthetic and/or deprecated.</a>
+<span class="sourceLineNo">279</span><a id="line.279">   * @param name the field's name.</a>
+<span class="sourceLineNo">280</span><a id="line.280">   * @param descriptor the field's descriptor (see {@link Type}).</a>
+<span class="sourceLineNo">281</span><a id="line.281">   * @param signature the field's signature. May be &lt;tt&gt;null&lt;/tt&gt; if the field's type does not use</a>
+<span class="sourceLineNo">282</span><a id="line.282">   *     generic types.</a>
+<span class="sourceLineNo">283</span><a id="line.283">   * @param value the field's initial value. This parameter, which may be &lt;tt&gt;null&lt;/tt&gt; if the field</a>
+<span class="sourceLineNo">284</span><a id="line.284">   *     does not have an initial value, must be an {@link Integer}, a {@link Float}, a {@link</a>
+<span class="sourceLineNo">285</span><a id="line.285">   *     Long}, a {@link Double} or a {@link String} (for &lt;tt&gt;int&lt;/tt&gt;, &lt;tt&gt;float&lt;/tt&gt;,</a>
+<span class="sourceLineNo">286</span><a id="line.286">   *     &lt;tt&gt;long&lt;/tt&gt; or &lt;tt&gt;String&lt;/tt&gt; fields respectively). &lt;i&gt;This parameter is only used for</a>
+<span class="sourceLineNo">287</span><a id="line.287">   *     static fields&lt;/i&gt;. Its value is ignored for non static fields, which must be initialized</a>
+<span class="sourceLineNo">288</span><a id="line.288">   *     through bytecode instructions in constructors or methods.</a>
+<span class="sourceLineNo">289</span><a id="line.289">   * @return a visitor to visit field annotations and attributes, or &lt;tt&gt;null&lt;/tt&gt; if this class</a>
+<span class="sourceLineNo">290</span><a id="line.290">   *     visitor is not interested in visiting these annotations and attributes.</a>
+<span class="sourceLineNo">291</span><a id="line.291">   */</a>
+<span class="sourceLineNo">292</span><a id="line.292">  public FieldVisitor visitField(</a>
+<span class="sourceLineNo">293</span><a id="line.293">      final int access,</a>
+<span class="sourceLineNo">294</span><a id="line.294">      final String name,</a>
+<span class="sourceLineNo">295</span><a id="line.295">      final String descriptor,</a>
+<span class="sourceLineNo">296</span><a id="line.296">      final String signature,</a>
+<span class="sourceLineNo">297</span><a id="line.297">      final Object value) {</a>
+<span class="sourceLineNo">298</span><a id="line.298">    if (cv != null) {</a>
+<span class="sourceLineNo">299</span><a id="line.299">      return cv.visitField(access, name, descriptor, signature, value);</a>
+<span class="sourceLineNo">300</span><a id="line.300">    }</a>
+<span class="sourceLineNo">301</span><a id="line.301">    return null;</a>
+<span class="sourceLineNo">302</span><a id="line.302">  }</a>
+<span class="sourceLineNo">303</span><a id="line.303"></a>
+<span class="sourceLineNo">304</span><a id="line.304">  /**</a>
+<span class="sourceLineNo">305</span><a id="line.305">   * Visits a method of the class. This method &lt;i&gt;must&lt;/i&gt; return a new {@link MethodVisitor}</a>
+<span class="sourceLineNo">306</span><a id="line.306">   * instance (or &lt;tt&gt;null&lt;/tt&gt;) each time it is called, i.e., it should not return a previously</a>
+<span class="sourceLineNo">307</span><a id="line.307">   * returned visitor.</a>
+<span class="sourceLineNo">308</span><a id="line.308">   *</a>
+<span class="sourceLineNo">309</span><a id="line.309">   * @param access the method's access flags (see {@link Opcodes}). This parameter also indicates if</a>
+<span class="sourceLineNo">310</span><a id="line.310">   *     the method is synthetic and/or deprecated.</a>
+<span class="sourceLineNo">311</span><a id="line.311">   * @param name the method's name.</a>
+<span class="sourceLineNo">312</span><a id="line.312">   * @param descriptor the method's descriptor (see {@link Type}).</a>
+<span class="sourceLineNo">313</span><a id="line.313">   * @param signature the method's signature. May be &lt;tt&gt;null&lt;/tt&gt; if the method parameters, return</a>
+<span class="sourceLineNo">314</span><a id="line.314">   *     type and exceptions do not use generic types.</a>
+<span class="sourceLineNo">315</span><a id="line.315">   * @param exceptions the internal names of the method's exception classes (see {@link</a>
+<span class="sourceLineNo">316</span><a id="line.316">   *     Type#getInternalName()}). May be &lt;tt&gt;null&lt;/tt&gt;.</a>
+<span class="sourceLineNo">317</span><a id="line.317">   * @return an object to visit the byte code of the method, or &lt;tt&gt;null&lt;/tt&gt; if this class visitor</a>
+<span class="sourceLineNo">318</span><a id="line.318">   *     is not interested in visiting the code of this method.</a>
+<span class="sourceLineNo">319</span><a id="line.319">   */</a>
+<span class="sourceLineNo">320</span><a id="line.320">  public MethodVisitor visitMethod(</a>
+<span class="sourceLineNo">321</span><a id="line.321">      final int access,</a>
+<span class="sourceLineNo">322</span><a id="line.322">      final String name,</a>
+<span class="sourceLineNo">323</span><a id="line.323">      final String descriptor,</a>
+<span class="sourceLineNo">324</span><a id="line.324">      final String signature,</a>
+<span class="sourceLineNo">325</span><a id="line.325">      final String[] exceptions) {</a>
+<span class="sourceLineNo">326</span><a id="line.326">    if (cv != null) {</a>
+<span class="sourceLineNo">327</span><a id="line.327">      return cv.visitMethod(access, name, descriptor, signature, exceptions);</a>
+<span class="sourceLineNo">328</span><a id="line.328">    }</a>
+<span class="sourceLineNo">329</span><a id="line.329">    return null;</a>
+<span class="sourceLineNo">330</span><a id="line.330">  }</a>
+<span class="sourceLineNo">331</span><a id="line.331"></a>
+<span class="sourceLineNo">332</span><a id="line.332">  /**</a>
+<span class="sourceLineNo">333</span><a id="line.333">   * Visits the end of the class. This method, which is the last one to be called, is used to inform</a>
+<span class="sourceLineNo">334</span><a id="line.334">   * the visitor that all the fields and methods of the class have been visited.</a>
+<span class="sourceLineNo">335</span><a id="line.335">   */</a>
+<span class="sourceLineNo">336</span><a id="line.336">  public void visitEnd() {</a>
+<span class="sourceLineNo">337</span><a id="line.337">    if (cv != null) {</a>
+<span class="sourceLineNo">338</span><a id="line.338">      cv.visitEnd();</a>
+<span class="sourceLineNo">339</span><a id="line.339">    }</a>
+<span class="sourceLineNo">340</span><a id="line.340">  }</a>
+<span class="sourceLineNo">341</span><a id="line.341">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../stylesheet.css" title="Style">
+</head>
+<body>
+<main role="main">
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span><a id="line.1">/**</a>
+<span class="sourceLineNo">002</span><a id="line.2"> * Copyright (c) Rich Hickey. All rights reserved.</a>
+<span class="sourceLineNo">003</span><a id="line.3"> * The use and distribution terms for this software are covered by the</a>
+<span class="sourceLineNo">004</span><a id="line.4"> * Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)</a>
+<span class="sourceLineNo">005</span><a id="line.5"> * which can be found in the file epl-v10.html at the root of this distribution.</a>
+<span class="sourceLineNo">006</span><a id="line.6"> * By using this software in any fashion, you are agreeing to be bound by</a>
+<span class="sourceLineNo">007</span><a id="line.7"> * the terms of this license.</a>
+<span class="sourceLineNo">008</span><a id="line.8"> * You must not remove this notice, or any other, from this software.</a>
+<span class="sourceLineNo">009</span><a id="line.9"> */</a>
+<span class="sourceLineNo">010</span><a id="line.10"></a>
+<span class="sourceLineNo">011</span><a id="line.11">package clojure.lang;</a>
+<span class="sourceLineNo">012</span><a id="line.12"></a>
+<span class="sourceLineNo">013</span><a id="line.13">import java.io.PushbackReader;</a>
+<span class="sourceLineNo">014</span><a id="line.14">import java.io.Reader;</a>
+<span class="sourceLineNo">015</span><a id="line.15">import java.io.LineNumberReader;</a>
+<span class="sourceLineNo">016</span><a id="line.16">import java.io.IOException;</a>
+<span class="sourceLineNo">017</span><a id="line.17"></a>
+<span class="sourceLineNo">018</span><a id="line.18"></a>
+<span class="sourceLineNo">019</span><a id="line.19">public class LineNumberingPushbackReader extends PushbackReader{</a>
+<span class="sourceLineNo">020</span><a id="line.20"></a>
+<span class="sourceLineNo">021</span><a id="line.21">// This class is a PushbackReader that wraps a LineNumberReader. The code</a>
+<span class="sourceLineNo">022</span><a id="line.22">// here to handle line terminators only mentions '\n' because</a>
+<span class="sourceLineNo">023</span><a id="line.23">// LineNumberReader collapses all occurrences of CR, LF, and CRLF into a</a>
+<span class="sourceLineNo">024</span><a id="line.24">// single '\n'.</a>
+<span class="sourceLineNo">025</span><a id="line.25"></a>
+<span class="sourceLineNo">026</span><a id="line.26">private static final int newline = (int) '\n';</a>
+<span class="sourceLineNo">027</span><a id="line.27"></a>
+<span class="sourceLineNo">028</span><a id="line.28">private boolean _atLineStart = true;</a>
+<span class="sourceLineNo">029</span><a id="line.29">private boolean _prev;</a>
+<span class="sourceLineNo">030</span><a id="line.30">private int _columnNumber = 1;</a>
+<span class="sourceLineNo">031</span><a id="line.31">private StringBuilder sb = null;</a>
+<span class="sourceLineNo">032</span><a id="line.32"></a>
+<span class="sourceLineNo">033</span><a id="line.33">public LineNumberingPushbackReader(Reader r){</a>
+<span class="sourceLineNo">034</span><a id="line.34">        super(new LineNumberReader(r));</a>
+<span class="sourceLineNo">035</span><a id="line.35">}</a>
+<span class="sourceLineNo">036</span><a id="line.36"></a>
+<span class="sourceLineNo">037</span><a id="line.37">public LineNumberingPushbackReader(Reader r, int size){</a>
+<span class="sourceLineNo">038</span><a id="line.38">        super(new LineNumberReader(r, size));</a>
+<span class="sourceLineNo">039</span><a id="line.39">}</a>
+<span class="sourceLineNo">040</span><a id="line.40"></a>
+<span class="sourceLineNo">041</span><a id="line.41">public int getLineNumber(){</a>
+<span class="sourceLineNo">042</span><a id="line.42">        return ((LineNumberReader) in).getLineNumber() + 1;</a>
+<span class="sourceLineNo">043</span><a id="line.43">}</a>
+<span class="sourceLineNo">044</span><a id="line.44"></a>
+<span class="sourceLineNo">045</span><a id="line.45">public void setLineNumber(int line) { ((LineNumberReader) in).setLineNumber(line - 1); }</a>
+<span class="sourceLineNo">046</span><a id="line.46"></a>
+<span class="sourceLineNo">047</span><a id="line.47">public void captureString(){</a>
+<span class="sourceLineNo">048</span><a id="line.48">    this.sb = new StringBuilder();</a>
+<span class="sourceLineNo">049</span><a id="line.49">}</a>
+<span class="sourceLineNo">050</span><a id="line.50"></a>
+<span class="sourceLineNo">051</span><a id="line.51">public String getString(){</a>
+<span class="sourceLineNo">052</span><a id="line.52">    if(sb != null)</a>
+<span class="sourceLineNo">053</span><a id="line.53">        {</a>
+<span class="sourceLineNo">054</span><a id="line.54">        String ret = sb.toString();</a>
+<span class="sourceLineNo">055</span><a id="line.55">        sb = null;</a>
+<span class="sourceLineNo">056</span><a id="line.56">        return ret;</a>
+<span class="sourceLineNo">057</span><a id="line.57">        }</a>
+<span class="sourceLineNo">058</span><a id="line.58">    return null;</a>
+<span class="sourceLineNo">059</span><a id="line.59">}</a>
+<span class="sourceLineNo">060</span><a id="line.60"></a>
+<span class="sourceLineNo">061</span><a id="line.61">public int getColumnNumber(){</a>
+<span class="sourceLineNo">062</span><a id="line.62">        return _columnNumber;</a>
+<span class="sourceLineNo">063</span><a id="line.63">}</a>
+<span class="sourceLineNo">064</span><a id="line.64"></a>
+<span class="sourceLineNo">065</span><a id="line.65">public int read() throws IOException{</a>
+<span class="sourceLineNo">066</span><a id="line.66">    int c = super.read();</a>
+<span class="sourceLineNo">067</span><a id="line.67">    _prev = _atLineStart;</a>
+<span class="sourceLineNo">068</span><a id="line.68">    if((c == newline) || (c == -1))</a>
+<span class="sourceLineNo">069</span><a id="line.69">        {</a>
+<span class="sourceLineNo">070</span><a id="line.70">        _atLineStart = true;</a>
+<span class="sourceLineNo">071</span><a id="line.71">        _columnNumber = 1;</a>
+<span class="sourceLineNo">072</span><a id="line.72">        }</a>
+<span class="sourceLineNo">073</span><a id="line.73">    else</a>
+<span class="sourceLineNo">074</span><a id="line.74">        {</a>
+<span class="sourceLineNo">075</span><a id="line.75">        _atLineStart = false;</a>
+<span class="sourceLineNo">076</span><a id="line.76">        _columnNumber++;</a>
+<span class="sourceLineNo">077</span><a id="line.77">        }</a>
+<span class="sourceLineNo">078</span><a id="line.78">    if(sb != null &amp;&amp; c != -1)</a>
+<span class="sourceLineNo">079</span><a id="line.79">        sb.append((char)c);</a>
+<span class="sourceLineNo">080</span><a id="line.80">    return c;</a>
+<span class="sourceLineNo">081</span><a id="line.81">}</a>
+<span class="sourceLineNo">082</span><a id="line.82"></a>
+<span class="sourceLineNo">083</span><a id="line.83">public void unread(int c) throws IOException{</a>
+<span class="sourceLineNo">084</span><a id="line.84">    super.unread(c);</a>
+<span class="sourceLineNo">085</span><a id="line.85">    _atLineStart = _prev;</a>
+<span class="sourceLineNo">086</span><a id="line.86">    _columnNumber--;</a>
+<span class="sourceLineNo">087</span><a id="line.87">    if(sb != null)</a>
+<span class="sourceLineNo">088</span><a id="line.88">        sb.deleteCharAt(sb.length()-1);</a>
+<span class="sourceLineNo">089</span><a id="line.89">}</a>
+<span class="sourceLineNo">090</span><a id="line.90"></a>
+<span class="sourceLineNo">091</span><a id="line.91">public String readLine() throws IOException{</a>
+<span class="sourceLineNo">092</span><a id="line.92">    int c = read();</a>
+<span class="sourceLineNo">093</span><a id="line.93">    String line;</a>
+<span class="sourceLineNo">094</span><a id="line.94">    switch (c) {</a>
+<span class="sourceLineNo">095</span><a id="line.95">    case -1:</a>
+<span class="sourceLineNo">096</span><a id="line.96">        line = null;</a>
+<span class="sourceLineNo">097</span><a id="line.97">        break;</a>
+<span class="sourceLineNo">098</span><a id="line.98">    case newline:</a>
+<span class="sourceLineNo">099</span><a id="line.99">        line = "";</a>
+<span class="sourceLineNo">100</span><a id="line.100">        break;</a>
+<span class="sourceLineNo">101</span><a id="line.101">    default:</a>
+<span class="sourceLineNo">102</span><a id="line.102">        String first = String.valueOf((char) c);</a>
+<span class="sourceLineNo">103</span><a id="line.103">        String rest = ((LineNumberReader)in).readLine();</a>
+<span class="sourceLineNo">104</span><a id="line.104">        if (sb != null)</a>
+<span class="sourceLineNo">105</span><a id="line.105">          sb.append(rest+"\n");</a>
+<span class="sourceLineNo">106</span><a id="line.106">        line = (rest == null) ? first : first + rest;</a>
+<span class="sourceLineNo">107</span><a id="line.107">        _prev = false;</a>
+<span class="sourceLineNo">108</span><a id="line.108">        _atLineStart = true;</a>
+<span class="sourceLineNo">109</span><a id="line.109">        _columnNumber = 1;</a>
+<span class="sourceLineNo">110</span><a id="line.110">        break;</a>
+<span class="sourceLineNo">111</span><a id="line.111">    }</a>
+<span class="sourceLineNo">112</span><a id="line.112">    return line;</a>
+<span class="sourceLineNo">113</span><a id="line.113">}</a>
+<span class="sourceLineNo">114</span><a id="line.114"></a>
+<span class="sourceLineNo">115</span><a id="line.115">public boolean atLineStart(){</a>
+<span class="sourceLineNo">116</span><a id="line.116">    return _atLineStart;</a>
+<span class="sourceLineNo">117</span><a id="line.117">}</a>
+<span class="sourceLineNo">118</span><a id="line.118">}</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</main>
+</body>
+</html>
